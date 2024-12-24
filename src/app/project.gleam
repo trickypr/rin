@@ -19,9 +19,11 @@ pub fn project(store: ProjectStore, req: Request, id: String) {
   let project = process.call(store, StoreProject(id, _), 10)
   let #(head, body, css, js) = process.call(project, ProjectGetCode, 10)
 
-  let editor_class = attribute.class("editor")
-  let editor_data = fn(type_: String) {
-    attribute.attribute("data-type", type_)
+  let editor = fn(type_: String, content: String) {
+    html.div(
+      [attribute.class("editor"), attribute.attribute("data-type", type_)],
+      [html.pre([], [html.text(content)])],
+    )
   }
 
   wisp.ok()
@@ -31,7 +33,7 @@ pub fn project(store: ProjectStore, req: Request, id: String) {
         html.title([], "Project"),
         html.script(
           [
-            attribute.src("/static/editor.js"),
+            attribute.src("/bundled/editor.js"),
             attribute.type_("module"),
             attribute.attribute("defer", ""),
           ],
@@ -39,23 +41,15 @@ pub fn project(store: ProjectStore, req: Request, id: String) {
         ),
         html.link([
           attribute.rel("stylesheet"),
-          attribute.href("/static/editor.css"),
+          attribute.href("/css/editor.css"),
         ]),
       ],
       [
-        tabs.tabs([
-          tabs.Tab("Head", [
-            html.div([editor_class, editor_data("head")], [html.text(head)]),
-          ]),
-          tabs.Tab("Body", [
-            html.div([editor_class, editor_data("body")], [html.text(body)]),
-          ]),
-          tabs.Tab("CSS", [
-            html.div([editor_class, editor_data("css")], [html.text(css)]),
-          ]),
-          tabs.Tab("JS", [
-            html.div([editor_class, editor_data("js")], [html.text(js)]),
-          ]),
+        tabs.tabs("editor", [
+          tabs.Tab("Head", [editor("head", head)]),
+          tabs.Tab("Body", [editor("body", body)]),
+          tabs.Tab("CSS", [editor("css", css)]),
+          tabs.Tab("JS", [editor("js", js)]),
         ]),
         html.div([attribute.class("preview__container")], [
           html.iframe([
@@ -72,8 +66,13 @@ pub fn project_view_head(head: String, css: String) {
   head <> "<style>" <> css <> "</style>"
 }
 
-pub fn project_view_body(body: String, js: String) {
-  body <> "<script type=\"module\">" <> js <> "</script>"
+pub fn project_view_body(body: String, js: String, insertion: String) {
+  body
+  <> "<script type=\"module\" data-from=\""
+  <> insertion
+  <> "\">"
+  <> js
+  <> "</script>"
 }
 
 pub fn project_view(store: ProjectStore, id: String) {
@@ -86,8 +85,8 @@ pub fn project_view(store: ProjectStore, id: String) {
       "<!doctype html><html><head>"
       <> project_view_head(head, css)
       <> "</head><body>"
-      <> project_view_body(body, js)
-      <> "<script type=\"module\" src=\"/static/hot.js\" defer async></script></body></html>"
+      <> project_view_body(body, js, "static")
+      <> "<script type=\"module\" src=\"/bundled/hot.js\" defer async></script></body></html>"
     }
     |> string_tree.from_string,
   )
@@ -139,7 +138,7 @@ pub fn project_hot(store: ProjectStore, req, id: String) {
             process.send(subj, HeadUpdate(project_view_head(head, css)))
           },
           fn(body, js) {
-            process.send(subj, BodyUpdate(project_view_body(body, js)))
+            process.send(subj, BodyUpdate(project_view_body(body, js, "hot")))
           },
         ),
       )
@@ -156,11 +155,8 @@ pub fn project_hot(store: ProjectStore, req, id: String) {
           process.send(project, project_store.ProjectRemoveListener(state.pid))
           actor.Stop(process.Normal)
         })
-        // TODO: Actual error handling
         |> result.unwrap_both
       }
-
-      io.debug(message)
 
       case message {
         HeadUpdate(str) ->

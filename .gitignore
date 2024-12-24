@@ -4,4 +4,5 @@
 erl_crash.dump
 .direnv/
 node_modules/
+priv/bundled/
 

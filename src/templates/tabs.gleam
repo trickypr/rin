@@ -7,12 +7,25 @@ pub type Tab(a) {
   Tab(name: String, contents: List(vdom.Element(a)))
 }
 
-pub fn tabs(tabs: List(Tab(a))) {
+pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
   let assert Ok(first_tab) = list.first(tabs)
+  let state_name = "'tabs__" <> tab_id <> "'"
 
   html.div(
     [
-      attribute.attribute("v-scope", "{ tab: '" <> first_tab.name <> "'}"),
+      attribute.id("tabs__container--" <> tab_id),
+      attribute.attribute(
+        "v-scope",
+        "{ tab: getLocalState("
+          <> state_name
+          <> ", '"
+          <> first_tab.name
+          <> "') }",
+      ),
+      attribute.attribute(
+        "v-effect",
+        "setLocalState(" <> state_name <> ", tab)",
+      ),
       attribute.class("tabs__container"),
     ],
     [

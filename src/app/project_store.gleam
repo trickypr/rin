@@ -109,11 +109,11 @@ fn project_msg(msg: ProjectMsg, state: Project) {
     ProjectSetBody(body) ->
       update(body, fn(b) { Project(..state, body: b) }, update_body)
     ProjectSetJS(js) ->
-      update(js, fn(b) { Project(..state, css: b) }, update_body)
+      update(js, fn(b) { Project(..state, js: b) }, update_body)
     ProjectSetCSS(css) ->
       update(css, fn(b) { Project(..state, css: b) }, update_head)
     ProjectSetHead(head) ->
-      update(head, fn(b) { Project(..state, body: b) }, update_head)
+      update(head, fn(b) { Project(..state, head: b) }, update_head)
 
     ProjectRemoveListener(pid) ->
       actor.continue(

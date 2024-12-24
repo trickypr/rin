@@ -20,8 +20,9 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            gleam
+            esbuild
             glas
+            gleam
           ];
         };
       }

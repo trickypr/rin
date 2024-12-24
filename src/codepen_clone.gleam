@@ -21,7 +21,8 @@ import app/project_store
 /// 
 pub fn middleware(
   req: wisp.Request,
-  static_dir: String,
+  css_dir: String,
+  bundled_dir: String,
   handle_request: fn(wisp.Request) -> wisp.Response,
 ) -> wisp.Response {
   // Permit browsers to simulate methods other than GET and POST using the
@@ -37,7 +38,8 @@ pub fn middleware(
   // Rewrite HEAD requests to GET requests and return an empty body.
   use req <- wisp.handle_head(req)
 
-  use <- wisp.serve_static(req, under: "/static", from: static_dir)
+  use <- wisp.serve_static(req, under: "/css", from: css_dir)
+  use <- wisp.serve_static(req, under: "/bundled", from: bundled_dir)
 
   // Handle the request!
   handle_request(req)
@@ -46,9 +48,10 @@ pub fn middleware(
 fn handle_request(
   project_store: project_store.ProjectStore,
   static_dir: String,
+  bundled_dir: String,
   req: Request,
 ) -> Response {
-  use _req <- middleware(req, static_dir)
+  use _req <- middleware(req, static_dir, bundled_dir)
 
   case wisp.path_segments(req) {
     ["project", id] -> project.project(project_store, req, id)
@@ -107,7 +110,12 @@ pub fn main() {
 
   let assert Ok(_) =
     wisp_mist.handler(
-      handle_request(project_store, static_directory(), _),
+      handle_request(
+        project_store,
+        static_directory("css"),
+        static_directory("bundled"),
+        _,
+      ),
       secret_key_base,
     )
     |> handle_mist_request(project_store)
@@ -119,7 +127,7 @@ pub fn main() {
   process.sleep_forever()
 }
 
-fn static_directory() {
+fn static_directory(name) {
   let assert Ok(priv_directory) = wisp.priv_directory("codepen_clone")
-  priv_directory <> "/static"
+  priv_directory <> "/" <> name
 }
