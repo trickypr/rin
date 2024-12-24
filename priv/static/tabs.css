@@ -1,6 +1,7 @@
 .tabs {
   display: flex;
   gap: 0.25rem;
+  padding-left: 0.25rem;
 
   background: var(--gray-50);
   border-bottom: var(--gray-200) solid 0.125rem;

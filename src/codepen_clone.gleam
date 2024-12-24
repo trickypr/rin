@@ -1,4 +1,5 @@
 import gleam/erlang/process
+import gleam/http/request
 import gleam/io
 import mist
 import radiate
@@ -6,6 +7,7 @@ import wisp.{type Request, type Response}
 import wisp/wisp_mist
 
 import app/project
+import app/project_store
 
 /// The middleware stack that the request handler uses. The stack is itself a
 /// middleware function!
@@ -42,7 +44,7 @@ pub fn middleware(
 }
 
 fn handle_request(
-  project_store: project.ProjectStore,
+  project_store: project_store.ProjectStore,
   static_dir: String,
   req: Request,
 ) -> Response {
@@ -52,19 +54,44 @@ fn handle_request(
     ["project", id] -> project.project(project_store, req, id)
     ["project", id, "view"] -> project.project_view(project_store, id)
     ["project", id, "body"] ->
-      project.project_update(project_store, req, project.ProjectSetBody, id)
+      project.project_update(
+        project_store,
+        req,
+        project_store.ProjectSetBody,
+        id,
+      )
     ["project", id, "head"] ->
-      project.project_update(project_store, req, project.ProjectSetHead, id)
+      project.project_update(
+        project_store,
+        req,
+        project_store.ProjectSetHead,
+        id,
+      )
     ["project", id, "css"] ->
-      project.project_update(project_store, req, project.ProjectSetCSS, id)
+      project.project_update(
+        project_store,
+        req,
+        project_store.ProjectSetCSS,
+        id,
+      )
     ["project", id, "js"] ->
-      project.project_update(project_store, req, project.ProjectSetJS, id)
+      project.project_update(project_store, req, project_store.ProjectSetJS, id)
     _ -> wisp.not_found()
   }
 }
 
+fn handle_mist_request(wisp_handler, project_store) {
+  fn(req) {
+    case request.path_segments(req) {
+      ["project", id, "view", "hot"] ->
+        project.project_hot(project_store, req, id)
+      _ -> wisp_handler(req)
+    }
+  }
+}
+
 pub fn main() {
-  // Hot reloading
+  // Gleam code hot reloading
   let _ =
     radiate.new()
     |> radiate.add_dir("src")
@@ -76,15 +103,17 @@ pub fn main() {
   wisp.configure_logger()
 
   let secret_key_base = wisp.random_string(64)
-  let assert Ok(project_store) = project.store_create()
+  let assert Ok(project_store) = project_store.store_create()
 
   let assert Ok(_) =
     wisp_mist.handler(
       handle_request(project_store, static_directory(), _),
       secret_key_base,
     )
+    |> handle_mist_request(project_store)
     |> mist.new
-    |> mist.port(8000)
+    |> mist.port(8080)
+    |> mist.bind("0.0.0.0")
     |> mist.start_http
 
   process.sleep_forever()

@@ -1,90 +1,19 @@
-import gleam/dict
+import app/project_store.{
+  type ProjectMsg, type ProjectStore, ProjectGetCode, StoreProject,
+}
 import gleam/erlang/process
+import gleam/function
+import gleam/http/response
+import gleam/io
 import gleam/otp/actor
 import gleam/result
 import gleam/string_tree
 import lustre/attribute
-import lustre/element
 import lustre/element/html
+import mist
 import templates/base
 import templates/tabs
 import wisp.{type Request}
-
-pub type ProjectStore =
-  process.Subject(StoreMsg)
-
-pub fn store_create() {
-  actor.start(dict.from_list([]), store_msg)
-}
-
-pub type StoreMsg {
-  StoreProject(id: String, reply_with: process.Subject(ProjectActor))
-}
-
-fn find_or_insert(dict, key, creator) {
-  dict.get(dict, key)
-  |> result.map_error(fn(_) {
-    let value = creator()
-    #(dict.insert(dict, key, value), value)
-  })
-  |> result.map(fn(value) { #(dict, value) })
-  |> result.unwrap_both
-}
-
-fn store_msg(msg: StoreMsg, state) {
-  case msg {
-    StoreProject(id, client) -> {
-      let #(new_state, project) =
-        find_or_insert(state, id, fn() {
-          let assert Ok(project) =
-            actor.start(
-              Project(
-                "<title>Example project</title>",
-                "<h1>Hello world!</h1>",
-                "body { font-family: sans-serif; }",
-                "",
-              ),
-              project_msg,
-            )
-          project
-        })
-
-      process.send(client, project)
-      actor.continue(new_state)
-    }
-  }
-}
-
-pub type Project {
-  Project(head: String, body: String, css: String, js: String)
-}
-
-pub type ProjectMsg {
-  ProjectGetCode(reply_with: process.Subject(#(String, String, String, String)))
-
-  ProjectSetHead(String)
-  ProjectSetBody(String)
-  ProjectSetCSS(String)
-  ProjectSetJS(String)
-}
-
-pub type ProjectActor =
-  process.Subject(ProjectMsg)
-
-fn project_msg(msg: ProjectMsg, state) {
-  case msg {
-    ProjectGetCode(client) -> {
-      let Project(head, body, css, js) = state
-      process.send(client, #(head, body, css, js))
-      actor.continue(state)
-    }
-
-    ProjectSetHead(head) -> actor.continue(Project(..state, head: head))
-    ProjectSetBody(body) -> actor.continue(Project(..state, body: body))
-    ProjectSetCSS(css) -> actor.continue(Project(..state, css: css))
-    ProjectSetJS(js) -> actor.continue(Project(..state, js: js))
-  }
-}
 
 pub fn project(store: ProjectStore, req: Request, id: String) {
   let project = process.call(store, StoreProject(id, _), 10)
@@ -139,6 +68,14 @@ pub fn project(store: ProjectStore, req: Request, id: String) {
   )
 }
 
+pub fn project_view_head(head: String, css: String) {
+  head <> "<style>" <> css <> "</style>"
+}
+
+pub fn project_view_body(body: String, js: String) {
+  body <> "<script type=\"module\">" <> js <> "</script>"
+}
+
 pub fn project_view(store: ProjectStore, id: String) {
   let project = process.call(store, StoreProject(id, _), 10)
   let #(head, body, css, js) = process.call(project, ProjectGetCode, 10)
@@ -147,14 +84,10 @@ pub fn project_view(store: ProjectStore, id: String) {
   |> wisp.html_body(
     {
       "<!doctype html><html><head>"
-      <> head
-      <> "<style>"
-      <> css
-      <> "</style></head><body>"
-      <> body
-      <> "<script type=\"module\">"
-      <> js
-      <> "</script></body></html>"
+      <> project_view_head(head, css)
+      <> "</head><body>"
+      <> project_view_body(body, js)
+      <> "<script type=\"module\" src=\"/static/hot.js\" defer async></script></body></html>"
     }
     |> string_tree.from_string,
   )
@@ -170,4 +103,82 @@ pub fn project_update(
   let project = process.call(store, StoreProject(id, _), 10)
   process.send(project, update_msg(body))
   wisp.ok()
+}
+
+pub type HotState {
+  HotState(pid: process.Pid)
+}
+
+pub type HotEvent {
+  HeadUpdate(String)
+  BodyUpdate(String)
+  Down(process.ProcessDown)
+}
+
+pub fn project_hot(store: ProjectStore, req, id: String) {
+  let project = process.call(store, StoreProject(id, _), 10)
+
+  mist.server_sent_events(
+    req,
+    response.new(200)
+      |> response.set_header("Access-Control-Allow-Origin", "*"),
+    init: fn() {
+      let subj = process.new_subject()
+      let pid = process.self()
+      let monitor = process.monitor_process(pid)
+      let selector =
+        process.new_selector()
+        |> process.selecting(subj, function.identity)
+        |> process.selecting_process_down(monitor, Down)
+
+      process.send(
+        project,
+        project_store.ProjectAddListener(
+          pid,
+          fn(head, css) {
+            process.send(subj, HeadUpdate(project_view_head(head, css)))
+          },
+          fn(body, js) {
+            process.send(subj, BodyUpdate(project_view_body(body, js)))
+          },
+        ),
+      )
+
+      actor.Ready(HotState(pid), selector)
+    },
+    loop: fn(message, conn, state) {
+      let send = fn(event: mist.SSEEvent) {
+        event
+        |> mist.send_event(conn, _)
+        |> result.map(fn(_) { actor.continue(state) })
+        |> result.map_error(fn(_) {
+          io.println_error("Failed to send message")
+          process.send(project, project_store.ProjectRemoveListener(state.pid))
+          actor.Stop(process.Normal)
+        })
+        // TODO: Actual error handling
+        |> result.unwrap_both
+      }
+
+      io.debug(message)
+
+      case message {
+        HeadUpdate(str) ->
+          mist.event(string_tree.from_string(str))
+          |> mist.event_name("head")
+          |> send
+        BodyUpdate(str) ->
+          mist.event(string_tree.from_string(str))
+          |> mist.event_name("body")
+          |> send
+
+        Down(_) -> {
+          process.send(project, project_store.ProjectRemoveListener(state.pid))
+          actor.Stop(process.Normal)
+        }
+      }
+
+      actor.continue(state)
+    },
+  )
 }

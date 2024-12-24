@@ -1,4 +1,5 @@
 // @ts-check
+/// <reference path="./editor.d.ts" />
 
 import { defaultKeymap } from 'https://cdn.jsdelivr.net/npm/@codemirror/commands@6.7.1/+esm'
 import { EditorState } from 'https://cdn.jsdelivr.net/npm/@codemirror/state@6.5.0/+esm'
@@ -47,7 +48,7 @@ for (const editor of editors) {
     extensions: [
       keymap.of(defaultKeymap),
       EditorView.updateListener.of(
-        debounce(1000, (updates) => {
+        debounce(200, (updates) => {
           const lastUpdate = updates.pop()
           if (!lastUpdate) return
           const body = lastUpdate.state.doc.toString()
