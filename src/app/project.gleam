@@ -1,23 +1,51 @@
-import app/project_store.{
-  type ProjectMsg, type ProjectStore, ProjectGetCode, StoreProject,
-}
+import app/project_store.{type ProjectStore, StoreProject}
+import github_auth
 import gleam/erlang/process
 import gleam/function
 import gleam/http/response
+import gleam/int
 import gleam/io
+import gleam/option
 import gleam/otp/actor
 import gleam/result
 import gleam/string_tree
 import lustre/attribute
 import lustre/element/html
 import mist
+import model/project
 import templates/base
+import templates/error_pages
 import templates/tabs
 import wisp.{type Request}
 
-pub fn project(store: ProjectStore, id: String) {
-  let project = process.call(store, StoreProject(id, _), 10)
-  let #(head, body, css, js) = process.call(project, ProjectGetCode, 10)
+pub fn handle_project_request(
+  req,
+  id: String,
+  rest: List(String),
+  store: ProjectStore,
+) {
+  use id <- error_pages.internal_error(int.parse(id))
+  use user <- github_auth.with_auth(req)
+  use project <- error_pages.not_found("project", project.get_by_id(id))
+  use <- project.owner_gate(project, user)
+
+  let update_fn = update(req, project, _)
+
+  case rest {
+    [] -> project_editor(project)
+    ["view"] -> project_view(project)
+
+    ["head"] -> update_fn(project.Head)
+    ["body"] -> update_fn(project.Body)
+    ["css"] -> update_fn(project.CSS)
+    ["js"] -> update_fn(project.JS)
+
+    _ -> wisp.not_found()
+  }
+}
+
+fn project_editor(project: project.Project) {
+  let project.Project(id, _, head, body, css, js) = project
 
   let editor = fn(type_: String, content: String) {
     html.div(
@@ -54,7 +82,7 @@ pub fn project(store: ProjectStore, id: String) {
         html.div([attribute.class("preview__container")], [
           html.iframe([
             attribute.class("preview"),
-            attribute.src("/project/" <> id <> "/view"),
+            attribute.src("/projects/" <> int.to_string(id) <> "/view"),
           ]),
         ]),
       ],
@@ -75,9 +103,8 @@ pub fn project_view_body(body: String, js: String, insertion: String) {
   <> "</script>"
 }
 
-pub fn project_view(store: ProjectStore, id: String) {
-  let project = process.call(store, StoreProject(id, _), 10)
-  let #(head, body, css, js) = process.call(project, ProjectGetCode, 10)
+fn project_view(project: project.Project) {
+  let project.Project(_, _, head, body, css, js) = project
 
   wisp.ok()
   |> wisp.html_body(
@@ -92,16 +119,13 @@ pub fn project_view(store: ProjectStore, id: String) {
   )
 }
 
-pub fn project_update(
-  store: ProjectStore,
-  req: Request,
-  update_msg: fn(String) -> ProjectMsg,
-  id: String,
-) {
+fn update(req: Request, project: project.Project, update: project.UpdateType) {
   use body <- wisp.require_string_body(req)
-  let project = process.call(store, StoreProject(id, _), 10)
-  process.send(project, update_msg(body))
-  wisp.ok()
+  case project.update_content(project, update, body) {
+    // TODO: Realtime updates
+    Ok(_) -> wisp.ok()
+    Error(_) -> wisp.internal_server_error()
+  }
 }
 
 pub type HotState {

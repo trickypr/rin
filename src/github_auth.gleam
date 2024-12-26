@@ -155,7 +155,10 @@ pub fn with_auth(req: wisp.Request, rest) {
   case cookie {
     Ok(cookie) -> {
       let user = json.parse(from: cookie, using: user.user_decoder())
-      rest(user)
+      case user {
+        Ok(user) -> rest(user)
+        Error(_) -> wisp.redirect("/auth/github")
+      }
     }
     Error(_) -> wisp.redirect("/auth/github")
   }

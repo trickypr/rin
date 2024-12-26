@@ -1,3 +1,4 @@
+import app/user
 import github_auth
 import gleam/erlang/process
 import gleam/http/request
@@ -58,38 +59,17 @@ fn handle_request(
   case wisp.path_segments(req) {
     [] ->
       case github_auth.has_auth(req) {
-        True -> wisp.ok()
+        True -> wisp.redirect("/projects")
         False -> wisp.redirect("/auth/github")
       }
 
     ["auth", "github"] -> github_auth.authorize()
     ["callback", "github"] -> github_auth.callback(req)
 
-    ["project", id] -> project.project(project_store, id)
-    ["project", id, "view"] -> project.project_view(project_store, id)
-    ["project", id, "body"] ->
-      project.project_update(
-        project_store,
-        req,
-        project_store.ProjectSetBody,
-        id,
-      )
-    ["project", id, "head"] ->
-      project.project_update(
-        project_store,
-        req,
-        project_store.ProjectSetHead,
-        id,
-      )
-    ["project", id, "css"] ->
-      project.project_update(
-        project_store,
-        req,
-        project_store.ProjectSetCSS,
-        id,
-      )
-    ["project", id, "js"] ->
-      project.project_update(project_store, req, project_store.ProjectSetJS, id)
+    ["projects"] -> user.project_list(req)
+
+    ["projects", id, ..rest] ->
+      project.handle_project_request(req, id, rest, project_store)
     _ -> wisp.not_found()
   }
 }
