@@ -31,6 +31,7 @@
           ];
 
           shellHook = ''
+            export JWT_SECRET=$(${pkgs.libossp_uuid}/bin/uuid)
             ${if builtins.pathExists "${untracked}/.env" then builtins.readFile "${untracked}/.env" else ""}
           '';
         };

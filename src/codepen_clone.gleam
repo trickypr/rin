@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/http/request
 import gleam/io
 import mist
+import model/database
 import radiate
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -55,6 +56,12 @@ fn handle_request(
   use _req <- middleware(req, static_dir, bundled_dir)
 
   case wisp.path_segments(req) {
+    [] ->
+      case github_auth.has_auth(req) {
+        True -> wisp.ok()
+        False -> wisp.redirect("/auth/github")
+      }
+
     ["auth", "github"] -> github_auth.authorize()
     ["callback", "github"] -> github_auth.callback(req)
 
@@ -108,6 +115,7 @@ pub fn main() {
     |> radiate.start()
 
   wisp.configure_logger()
+  database.setup()
 
   let secret_key_base = wisp.random_string(64)
   let assert Ok(project_store) = project_store.store_create()

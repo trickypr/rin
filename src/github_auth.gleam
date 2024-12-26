@@ -6,7 +6,9 @@ import gleam/httpc
 import gleam/io
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/result
+import model/user
 import wisp
 
 pub fn authorize() {
@@ -73,16 +75,57 @@ pub fn callback(req: wisp.Request) {
       |> result.replace_error(CallbackErrorInternal("Parsing body")),
     )
 
-    // TODO: Insert into database
-    io.debug(resp)
+    use name <- result.try(get_name(resp.access_token))
 
-    Ok(Nil)
+    use user <- result.try(
+      case user.get_by_name(name) {
+        option.Some(res) -> res |> user.update_access_token(resp.access_token)
+        option.None -> user.create(user.Github, name, resp.access_token)
+      }
+      |> result.map_error(io.debug)
+      |> result.replace_error(CallbackErrorInternal("sqlite")),
+    )
+
+    Ok(user)
   }
 
   case result {
     Error(error) -> wisp.response(500) |> wisp.string_body(error_string(error))
-    Ok(_) -> wisp.redirect("/")
+    Ok(user) ->
+      wisp.redirect("/")
+      |> wisp.set_cookie(
+        req,
+        "user",
+        user.to_json(user) |> json.to_string(),
+        wisp.Signed,
+        24 * 60 * 60,
+      )
   }
+}
+
+fn github_request(path: String, access_token: String) {
+  request.to("https://api.github.com" <> path)
+  |> result.replace_error(CallbackErrorInternal("creating request"))
+  |> result.map(fn(req) {
+    req
+    |> request.set_header("Authorization", "Bearer " <> access_token)
+    |> request.set_header("User-Agent", "perms.dev")
+    |> request.set_header("X-GitHub-Api-Version", "2022-11-28")
+  })
+  |> result.then(fn(req) {
+    httpc.send(req) |> result.map_error(CallbackErrorHttp)
+  })
+}
+
+fn get_name(access_token) {
+  use req <- result.try(github_request("/user", access_token))
+  json.parse(req.body, {
+    use login <- decode.field("login", decode.string)
+    decode.success(login)
+  })
+  |> result.replace_error(CallbackErrorInternal(
+    "failed to decode user response",
+  ))
 }
 
 type CallbackError {
@@ -98,5 +141,22 @@ fn error_string(error: CallbackError) {
     CallbackErrorHttp(_) -> "http error"
     CallbackErrorInternal(str) -> "internal error: " <> str
     CallbackErrorNoCode -> "no code"
+  }
+}
+
+pub fn has_auth(req: wisp.Request) {
+  let cookie = wisp.get_cookie(req, "user", wisp.Signed)
+  result.is_ok(cookie)
+}
+
+pub fn with_auth(req: wisp.Request, rest) {
+  let cookie = wisp.get_cookie(req, "user", wisp.Signed)
+
+  case cookie {
+    Ok(cookie) -> {
+      let user = json.parse(from: cookie, using: user.user_decoder())
+      rest(user)
+    }
+    Error(_) -> wisp.redirect("/auth/github")
   }
 }
