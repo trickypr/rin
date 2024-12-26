@@ -30,12 +30,18 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
     ],
     [
       html.div(
-        [attribute.class("tabs")],
+        [attribute.attribute("role", "tablist"), attribute.class("tabs")],
         list.map(tabs, fn(tab) {
           html.div(
             [
+              // TODO: Proper tab accessibility
+              attribute.attribute("role", "tab"),
               attribute.attribute("@click", "tab = '" <> tab.name <> "'"),
               attribute.attribute(":selected", "tab == '" <> tab.name <> "'"),
+              attribute.attribute(
+                ":aria-selected",
+                "tab == '" <> tab.name <> "'",
+              ),
               attribute.class("tabs__tab"),
             ],
             [html.div([attribute.class("tabs__inner")], [html.text(tab.name)])],

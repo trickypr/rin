@@ -37,7 +37,8 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "untracked": "untracked"
       }
     },
     "systems": {
@@ -53,6 +54,19 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
+      }
+    },
+    "untracked": {
+      "flake": false,
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-Kabn7DxNHCzxEfUitIGH1nBfmu9k6HTyGIwBbhQPZBI=",
+        "path": ".",
+        "type": "path"
+      },
+      "original": {
+        "path": ".",
+        "type": "path"
       }
     }
   },

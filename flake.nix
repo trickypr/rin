@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    untracked = {
+      url = "path:.";
+      flake = false;
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      untracked,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -24,6 +29,10 @@
             glas
             gleam
           ];
+
+          shellHook = ''
+            ${if builtins.pathExists "${untracked}/.env" then builtins.readFile "${untracked}/.env" else ""}
+          '';
         };
       }
     );

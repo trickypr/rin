@@ -15,7 +15,7 @@ import templates/base
 import templates/tabs
 import wisp.{type Request}
 
-pub fn project(store: ProjectStore, req: Request, id: String) {
+pub fn project(store: ProjectStore, id: String) {
   let project = process.call(store, StoreProject(id, _), 10)
   let #(head, body, css, js) = process.call(project, ProjectGetCode, 10)
 

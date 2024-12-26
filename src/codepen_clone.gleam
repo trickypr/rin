@@ -1,3 +1,4 @@
+import github_auth
 import gleam/erlang/process
 import gleam/http/request
 import gleam/io
@@ -54,7 +55,10 @@ fn handle_request(
   use _req <- middleware(req, static_dir, bundled_dir)
 
   case wisp.path_segments(req) {
-    ["project", id] -> project.project(project_store, req, id)
+    ["auth", "github"] -> github_auth.authorize()
+    ["callback", "github"] -> github_auth.callback(req)
+
+    ["project", id] -> project.project(project_store, id)
     ["project", id, "view"] -> project.project_view(project_store, id)
     ["project", id, "body"] ->
       project.project_update(
