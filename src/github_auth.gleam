@@ -9,6 +9,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import model/user
+import templates/mist_compat
 import wisp
 
 pub fn authorize() {
@@ -149,17 +150,17 @@ pub fn has_auth(req: wisp.Request) {
   result.is_ok(cookie)
 }
 
-pub fn with_auth(req: wisp.Request, rest) {
+pub fn with_auth(req: wisp.Request) {
   let cookie = wisp.get_cookie(req, "user", wisp.Signed)
 
   case cookie {
     Ok(cookie) -> {
       let user = json.parse(from: cookie, using: user.user_decoder())
       case user {
-        Ok(user) -> rest(user)
-        Error(_) -> wisp.redirect("/auth/github")
+        Ok(user) -> mist_compat.compat_continue(user)
+        Error(_) -> mist_compat.compat_redirect("/auth/github")
       }
     }
-    Error(_) -> wisp.redirect("/auth/github")
+    Error(_) -> mist_compat.compat_redirect("/auth/github")
   }
 }

@@ -5,6 +5,7 @@ import gleam/result
 import model/database
 import model/user
 import sqlight
+import templates/error_pages
 import wisp
 
 pub type Project {
@@ -67,18 +68,29 @@ fn update_type_to_column(type_: UpdateType) {
   }
 }
 
+fn update_type_content(project: Project, type_: UpdateType, content: String) {
+  case type_ {
+    Head -> Project(..project, head: content)
+    Body -> Project(..project, body: content)
+    CSS -> Project(..project, css: content)
+    JS -> Project(..project, js: content)
+  }
+}
+
 pub fn update_content(project: Project, type_: UpdateType, content: String) {
   use conn <- database.get()
   let sql =
     "update projects set "
     <> update_type_to_column(type_)
     <> " = ? where id = ?"
-  sqlight.query(
+  use _ <- result.try(sqlight.query(
     sql,
     on: conn,
     with: [sqlight.text(content), sqlight.int(project.id)],
     expecting: dynamic.element(0, dynamic.optional(dynamic.int)),
-  )
+  ))
+
+  update_type_content(project, type_, content) |> Ok
 }
 
 pub fn get_by_id(id: Int) {
@@ -92,9 +104,10 @@ pub fn get_for_users(user: user.User) {
   query("owner_id = ?", [sqlight.int(user.id)])
 }
 
-pub fn owner_gate(project: Project, user: user.User, continue) {
+pub fn owner_gate(project: Project, user: user.User) {
   case project.owner_id == user.id {
-    True -> continue()
-    False -> wisp.bad_request()
+    True -> option.Some(Nil)
+    False -> option.None
   }
+  |> error_pages.not_found("project", _)
 }

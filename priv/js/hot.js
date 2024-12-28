@@ -1,12 +1,30 @@
 // @ts-check
 
-const eventz = new EventSource(`${window.location.pathname}/hot`)
+const socket = new WebSocket(
+  `ws${window.location.protocol === 'https' ? 's' : ''}://${window.location.host}${window.location.pathname}/live`,
+)
 
-eventz.addEventListener('head', (e) => {
-  document.head.innerHTML = e.data
+socket.addEventListener('message', ({ data }) => {
+  const /** @type {string[]} */ split = data.split(' ')
+
+  switch (split.shift()) {
+    case 'swap':
+      swap(split.shift(), split.join(' '))
+      break
+  }
 })
-eventz.addEventListener('body', (e) => {
-  document.body.innerHTML = e.data
+
+/**
+ * @param {'head' | 'body'} target
+ * @param {string} content
+ */
+function swap(target, content) {
+  if (target === 'head') {
+    document.head.innerHTML = content
+    return
+  }
+
+  document.body.innerHTML = content
 
   // Trigger the inserted script
   const scripts = document.querySelectorAll('script[data-from="hot"]')
@@ -21,11 +39,4 @@ eventz.addEventListener('body', (e) => {
 
     hotScript.parentElement?.replaceChild(newScript, hotScript)
   }
-})
-
-// This is not 'ideal' but there is no way to close the connection from
-// the server :(
-eventz.onerror = (/** @type {Event} */ error) => {
-  console.warn('Hot reload failed', error)
-  eventz.close()
 }

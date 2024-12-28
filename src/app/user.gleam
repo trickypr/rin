@@ -5,12 +5,13 @@ import lustre/attribute
 import lustre/element/html
 import model/project
 import templates/base
-import templates/error_pages
+import templates/error_pages.{internal_error}
+import templates/mist_compat.{try_wisp}
 import wisp
 
 pub fn project_list(request: wisp.Request) {
-  use user <- github_auth.with_auth(request)
-  use projs <- error_pages.internal_error(project.get_for_users(user))
+  use user <- try_wisp(github_auth.with_auth(request))
+  use projs <- try_wisp(internal_error(project.get_for_users(user)))
 
   wisp.ok()
   |> wisp.html_body(base.base(

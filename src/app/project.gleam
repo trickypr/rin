@@ -1,20 +1,13 @@
-import app/project_store.{type ProjectStore, StoreProject}
+import app/live
 import github_auth
-import gleam/erlang/process
-import gleam/function
-import gleam/http/response
 import gleam/int
-import gleam/io
-import gleam/option
-import gleam/otp/actor
-import gleam/result
 import gleam/string_tree
 import lustre/attribute
 import lustre/element/html
-import mist
 import model/project
 import templates/base
-import templates/error_pages
+import templates/error_pages.{internal_error, not_found}
+import templates/mist_compat.{try_wisp}
 import templates/tabs
 import wisp.{type Request}
 
@@ -22,14 +15,14 @@ pub fn handle_project_request(
   req,
   id: String,
   rest: List(String),
-  store: ProjectStore,
+  live: live.Live,
 ) {
-  use id <- error_pages.internal_error(int.parse(id))
-  use user <- github_auth.with_auth(req)
-  use project <- error_pages.not_found("project", project.get_by_id(id))
-  use <- project.owner_gate(project, user)
+  use id <- try_wisp(internal_error(int.parse(id)))
+  use user <- try_wisp(github_auth.with_auth(req))
+  use project <- try_wisp(not_found("project", project.get_by_id(id)))
+  use _ <- try_wisp(project.owner_gate(project, user))
 
-  let update_fn = update(req, project, _)
+  let update_fn = update(live, req, project, _)
 
   case rest {
     [] -> project_editor(project)
@@ -90,115 +83,51 @@ fn project_editor(project: project.Project) {
   )
 }
 
-pub fn project_view_head(head: String, css: String) {
-  head <> "<style>" <> css <> "</style>"
+fn project_view_head(project: project.Project) {
+  project.head <> "<style>" <> project.css <> "</style>"
 }
 
-pub fn project_view_body(body: String, js: String, insertion: String) {
-  body
+fn project_view_body(project: project.Project, insertion: String) {
+  project.body
   <> "<script type=\"module\" data-from=\""
   <> insertion
   <> "\">"
-  <> js
+  <> project.js
   <> "</script>"
 }
 
 fn project_view(project: project.Project) {
-  let project.Project(_, _, head, body, css, js) = project
-
   wisp.ok()
   |> wisp.html_body(
     {
       "<!doctype html><html><head>"
-      <> project_view_head(head, css)
+      <> project_view_head(project)
       <> "</head><body>"
-      <> project_view_body(body, js, "static")
+      <> project_view_body(project, "static")
       <> "<script type=\"module\" src=\"/bundled/hot.js\" defer async></script></body></html>"
     }
     |> string_tree.from_string,
   )
 }
 
-fn update(req: Request, project: project.Project, update: project.UpdateType) {
+fn update(
+  live: live.Live,
+  req: Request,
+  project: project.Project,
+  update: project.UpdateType,
+) {
   use body <- wisp.require_string_body(req)
   case project.update_content(project, update, body) {
-    // TODO: Realtime updates
-    Ok(_) -> wisp.ok()
+    Ok(project) -> {
+      let #(location, content) = case update {
+        project.Body -> #(live.Body, project_view_body(project, "hot"))
+        project.JS -> #(live.Body, project_view_body(project, "hot"))
+        project.CSS -> #(live.Head, project_view_head(project))
+        project.Head -> #(live.Head, project_view_head(project))
+      }
+      live.send_swap_event(live, project.id, location, content)
+      wisp.ok()
+    }
     Error(_) -> wisp.internal_server_error()
   }
-}
-
-pub type HotState {
-  HotState(pid: process.Pid)
-}
-
-pub type HotEvent {
-  HeadUpdate(String)
-  BodyUpdate(String)
-  Down(process.ProcessDown)
-}
-
-pub fn project_hot(store: ProjectStore, req, id: String) {
-  let project = process.call(store, StoreProject(id, _), 10)
-
-  mist.server_sent_events(
-    req,
-    response.new(200)
-      |> response.set_header("Access-Control-Allow-Origin", "*"),
-    init: fn() {
-      let subj = process.new_subject()
-      let pid = process.self()
-      let monitor = process.monitor_process(pid)
-      let selector =
-        process.new_selector()
-        |> process.selecting(subj, function.identity)
-        |> process.selecting_process_down(monitor, Down)
-
-      process.send(
-        project,
-        project_store.ProjectAddListener(
-          pid,
-          fn(head, css) {
-            process.send(subj, HeadUpdate(project_view_head(head, css)))
-          },
-          fn(body, js) {
-            process.send(subj, BodyUpdate(project_view_body(body, js, "hot")))
-          },
-        ),
-      )
-
-      actor.Ready(HotState(pid), selector)
-    },
-    loop: fn(message, conn, state) {
-      let send = fn(event: mist.SSEEvent) {
-        event
-        |> mist.send_event(conn, _)
-        |> result.map(fn(_) { actor.continue(state) })
-        |> result.map_error(fn(_) {
-          io.println_error("Failed to send message")
-          process.send(project, project_store.ProjectRemoveListener(state.pid))
-          actor.Stop(process.Normal)
-        })
-        |> result.unwrap_both
-      }
-
-      case message {
-        HeadUpdate(str) ->
-          mist.event(string_tree.from_string(str))
-          |> mist.event_name("head")
-          |> send
-        BodyUpdate(str) ->
-          mist.event(string_tree.from_string(str))
-          |> mist.event_name("body")
-          |> send
-
-        Down(_) -> {
-          process.send(project, project_store.ProjectRemoveListener(state.pid))
-          actor.Stop(process.Normal)
-        }
-      }
-
-      actor.continue(state)
-    },
-  )
 }

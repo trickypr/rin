@@ -1,7 +1,9 @@
+import app/live
 import app/user
 import github_auth
 import gleam/erlang/process
 import gleam/http/request
+import gleam/int
 import gleam/io
 import mist
 import model/database
@@ -10,7 +12,9 @@ import wisp.{type Request, type Response}
 import wisp/wisp_mist
 
 import app/project
-import app/project_store
+import model/project as project_model
+import templates/error_pages.{internal_error, not_found}
+import templates/mist_compat.{try_mist}
 
 /// The middleware stack that the request handler uses. The stack is itself a
 /// middleware function!
@@ -49,7 +53,7 @@ pub fn middleware(
 }
 
 fn handle_request(
-  project_store: project_store.ProjectStore,
+  live: live.Live,
   static_dir: String,
   bundled_dir: String,
   req: Request,
@@ -69,16 +73,25 @@ fn handle_request(
     ["projects"] -> user.project_list(req)
 
     ["projects", id, ..rest] ->
-      project.handle_project_request(req, id, rest, project_store)
+      project.handle_project_request(req, id, rest, live)
     _ -> wisp.not_found()
   }
 }
 
-fn handle_mist_request(wisp_handler, project_store) {
-  fn(req) {
+fn handle_mist_request(wisp_handler, live) {
+  fn(req: request.Request(mist.Connection)) {
     case request.path_segments(req) {
-      ["project", id, "view", "hot"] ->
-        project.project_hot(project_store, req, id)
+      ["projects", id, "view", "live"] -> {
+        use id <- try_mist(internal_error(int.parse(id)))
+        // TODO: Auth
+        // use user <- try_mist(github_auth.with_auth(req))
+        use project <- try_mist(not_found(
+          "project",
+          project_model.get_by_id(id),
+        ))
+        // use _ <- try_mist(project_model.owner_gate(project, user))
+        live.live_socket_request(req, live, project)
+      }
       _ -> wisp_handler(req)
     }
   }
@@ -98,19 +111,21 @@ pub fn main() {
   database.setup()
 
   let secret_key_base = wisp.random_string(64)
-  let assert Ok(project_store) = project_store.store_create()
+  let assert Ok(live) = live.create()
 
-  let assert Ok(_) =
+  let wisp_handler =
     wisp_mist.handler(
       handle_request(
-        project_store,
+        live,
         static_directory("css"),
         static_directory("bundled"),
         _,
       ),
       secret_key_base,
     )
-    |> handle_mist_request(project_store)
+
+  let assert Ok(_) =
+    handle_mist_request(wisp_handler, live)
     |> mist.new
     |> mist.port(8080)
     |> mist.bind("0.0.0.0")
