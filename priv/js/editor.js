@@ -6,15 +6,120 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { codemirror } from './theme.js'
+import { syntaxTree } from '@codemirror/language'
+import { autocompletion } from '@codemirror/autocomplete'
+import { characterEntities } from 'character-entities'
 
 /** @type {HTMLDivElement[]} */
 const editors = [...document.querySelectorAll('.editor')]
 
+export let /** @type {Record<'head' | 'body' | 'css' | 'js', EditorView | null>} */ editorMap =
+    {
+      head: null,
+      body: null,
+      css: null,
+      js: null,
+    }
+
+/**
+ * @param {EditorView} editor
+ * @param {string} key
+ * @param {Set<string>} set
+ */
+function fetchAttributes(editor, key, set) {
+  const regex = new RegExp(`${key}="(?<value>.*?)"`, 'gm')
+  const code = editor.state.doc.toString()
+
+  let match = regex.exec(code)
+
+  while (match !== null) {
+    const value = match.groups.value
+    value.split(' ').forEach((v) => set.add(v))
+    match = regex.exec(code)
+  }
+}
+
 const langMap = {
-  head: () => import('@codemirror/lang-html').then((p) => p.html),
+  head: async () => [
+    ...(await import('@codemirror/lang-html').then((p) => [
+      p.html(),
+      p.htmlLanguage.data.of({
+        autocomplete: (
+          /** @type {import('@codemirror/autocomplete').CompletionContext} */ context,
+        ) => {
+          const { state, pos } = context
+          const tree = syntaxTree(state)
+          const node = tree.resolveInner(pos, -1)
+          const nodePrev = node.prevSibling
+
+          if (!nodePrev || nodePrev.name !== 'InvalidEntity') return
+
+          return {
+            from: node.from,
+            options: Object.entries(characterEntities).map(
+              ([label, detail]) => ({
+                label: label + ';',
+                detail,
+                type: 'text',
+              }),
+            ),
+          }
+        },
+      }),
+    ])),
+    // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
+    await import('@emmetio/codemirror6-plugin').then((p) =>
+      p.abbreviationTracker(),
+    ),
+  ],
   body: () => langMap['head'](),
-  css: () => import('@codemirror/lang-css').then((p) => p.css),
-  js: () => import('@codemirror/lang-javascript').then((p) => p.javascript),
+  css: async () => [
+    ...(await import('@codemirror/lang-css').then((p) => [
+      p.css(),
+      p.cssLanguage.data.of({
+        autocomplete: (
+          /** @type {import('@codemirror/autocomplete').CompletionContext} */ context,
+        ) => {
+          const { state, pos } = context
+          const node = syntaxTree(state).resolveInner(pos, -1)
+
+          if (node.name == 'IdName' || node.name == '#') {
+            const ids = new Set()
+            if (editorMap.body) fetchAttributes(editorMap.body, 'id', ids)
+            if (editorMap.head) fetchAttributes(editorMap.head, 'id', ids)
+
+            return {
+              from: node.from,
+              options: [...ids].map((label) => ({
+                label,
+                type: 'namespace',
+              })),
+            }
+          }
+
+          if (node.name == 'ClassName') {
+            const classes = new Set()
+            if (editorMap.body)
+              fetchAttributes(editorMap.body, 'class', classes)
+            if (editorMap.head)
+              fetchAttributes(editorMap.head, 'class', classes)
+
+            return {
+              from: node.from,
+              options: [...classes].map((label) => ({
+                label,
+                type: 'namespace',
+              })),
+            }
+          }
+        },
+      }),
+    ])),
+    // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
+  ],
+  js: async () => [
+    await import('@codemirror/lang-javascript').then((p) => p.javascript()),
+  ],
 }
 
 /**
@@ -49,13 +154,13 @@ editors.forEach(async (editor) => {
   let lastSave = doc
   editor.innerHTML = ''
 
-  const langExtension = await langMap[type]()
+  const langExtensions = await langMap[type]()
   const state = EditorState.create({
     doc,
     extensions: [
       basicSetup,
       codemirror,
-      langExtension(),
+      ...langExtensions,
       keymap.of(defaultKeymap),
       EditorView.updateListener.of(
         debounce(
@@ -78,7 +183,7 @@ editors.forEach(async (editor) => {
     ],
   })
 
-  new EditorView({
+  editorMap[type] = new EditorView({
     state,
     parent: editor,
   })
