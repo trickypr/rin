@@ -29,6 +29,7 @@ pub fn setup() {
       foreign key(owner_id) references users(id)
     );
 
+    alter table projects add column modules text not null default \"{}\";
   "
     |> sqlight.exec(conn)
 

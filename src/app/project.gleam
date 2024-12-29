@@ -1,9 +1,13 @@
 import app/live
 import github_auth
+import gleam/dict
 import gleam/int
+import gleam/list
+import gleam/option
 import gleam/string_tree
 import lustre/attribute
 import lustre/element/html
+import model/modules
 import model/project
 import templates/base
 import templates/error_pages.{internal_error, not_found}
@@ -38,7 +42,7 @@ pub fn handle_project_request(
 }
 
 fn project_editor(project: project.Project) {
-  let project.Project(id, _, head, body, css, js) = project
+  let project.Project(id, _, head, body, css, js, modules) = project
 
   let editor = fn(type_: String, content: String) {
     html.div(
@@ -71,6 +75,20 @@ fn project_editor(project: project.Project) {
           tabs.Tab("Body", [editor("body", body)]),
           tabs.Tab("CSS", [editor("css", css)]),
           tabs.Tab("JS", [editor("js", js)]),
+          tabs.Tab("Dependancies", [
+            html.ul(
+              [],
+              dict.to_list(modules)
+                |> list.map(fn(module) {
+                  let #(name, info) = module
+                  html.li([], [
+                    html.text(
+                      name <> ": " <> option.unwrap(info.version, "latest"),
+                    ),
+                  ])
+                }),
+            ),
+          ]),
         ]),
         html.div([attribute.class("preview__container")], [
           html.iframe([
@@ -89,7 +107,9 @@ fn project_view_head(project: project.Project) {
 
 fn project_view_body(project: project.Project, insertion: String) {
   project.body
-  <> "<script type=\"module\" data-from=\""
+  <> "<script type=\"importmap\">"
+  <> modules.to_import_map(project.modules)
+  <> "</script><script type=\"module\" data-from=\""
   <> insertion
   <> "\">"
   <> project.js

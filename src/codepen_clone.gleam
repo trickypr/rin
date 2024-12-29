@@ -1,5 +1,6 @@
 import app/live
 import app/user
+import envoy
 import github_auth
 import gleam/erlang/process
 import gleam/http/request
@@ -110,7 +111,7 @@ pub fn main() {
   wisp.configure_logger()
   database.setup()
 
-  let secret_key_base = wisp.random_string(64)
+  let assert Ok(secret_key_base) = envoy.get("JWT_SECRET")
   let assert Ok(live) = live.create()
 
   let wisp_handler =
