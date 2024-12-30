@@ -61,7 +61,6 @@ const exposed = {
             vfs.set(`/node_modules/@types/${typesPkg}/package.json`, file)
           }
 
-          console.log(vfs)
           for (const [name, contents] of vfs) {
             if (env.getSourceFile(name)) {
               env.updateFile(name, contents)

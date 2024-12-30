@@ -1,7 +1,12 @@
 .tabs {
   display: flex;
   gap: 0.25rem;
-  padding-left: 0.25rem;
+}
+
+.tabs__alignment {
+  display: flex;
+  padding: 0 0.25rem;
+  justify-content: space-between;
 
   background: var(--gray-50);
   border-bottom: var(--gray-200) solid 0.125rem;
@@ -31,6 +36,13 @@
       border-top-right-radius: 0.25rem;
     }
   }
+}
+
+.tabs__tab-icon {
+  width: 1.2rem;
+  height: 1.3rem;
+  display: flex;
+  align-content: center;
 }
 
 .tabs__inner {

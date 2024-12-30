@@ -5,6 +5,8 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string_tree
+import gleroglero/mini
+import gleroglero/outline
 import lustre/attribute
 import lustre/element/html
 import model/modules
@@ -71,24 +73,29 @@ fn project_editor(project: project.Project) {
       ],
       [
         tabs.tabs("editor", [
-          tabs.Tab("Head", [editor("head", head)]),
-          tabs.Tab("Body", [editor("body", body)]),
-          tabs.Tab("CSS", [editor("css", css)]),
-          tabs.Tab("JS", [editor("js", js)]),
-          tabs.Tab("Dependancies", [
-            html.ul(
-              [],
-              dict.to_list(modules)
-                |> list.map(fn(module) {
-                  let #(name, info) = module
-                  html.li([], [
-                    html.text(
-                      name <> ": " <> option.unwrap(info.version, "latest"),
-                    ),
-                  ])
-                }),
-            ),
-          ]),
+          tabs.Tab("Head", tabs.Name, [editor("head", head)], pos: tabs.Left),
+          tabs.Tab("Body", tabs.Name, [editor("body", body)], pos: tabs.Left),
+          tabs.Tab("CSS", tabs.Name, [editor("css", css)], pos: tabs.Left),
+          tabs.Tab("JS", tabs.Name, [editor("js", js)], pos: tabs.Left),
+          tabs.Tab(
+            "Dependancies",
+            tabs.Icon(outline.cube()),
+            [
+              html.ul(
+                [],
+                dict.to_list(modules)
+                  |> list.map(fn(module) {
+                    let #(name, info) = module
+                    html.li([], [
+                      html.text(
+                        name <> ": " <> option.unwrap(info.version, "latest"),
+                      ),
+                    ])
+                  }),
+              ),
+            ],
+            pos: tabs.Right,
+          ),
         ]),
         html.div([attribute.class("preview__container")], [
           html.iframe([
