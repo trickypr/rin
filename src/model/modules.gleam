@@ -1,3 +1,4 @@
+import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
@@ -85,6 +86,23 @@ pub fn new_deps(imports: List(Import), modules: Modules) {
   |> list.map(fn(imp) { #(imp.module_specifier, ModuleInfo(version: None)) })
   |> dict.from_list
   |> dict.filter(fn(key, _) { !dict.has_key(modules, key) })
+}
+
+/// Cleans up packages that are unused and do not have an assigned version
+pub fn cleanup(imports: List(Import), modules: Modules) {
+  let filter = fn(name, info: ModuleInfo) {
+    option.is_some(info.version)
+    || {
+      list.find(imports, fn(imp) { imp.module_specifier == name })
+      |> result.is_ok
+    }
+  }
+
+  // TODO: Make path dependancies not make this explode
+  #(
+    modules |> dict.filter(filter),
+    modules |> dict.filter(fn(n, i) { !filter(n, i) }),
+  )
 }
 
 // ============================================================================= 

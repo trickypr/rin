@@ -1,24 +1,14 @@
 // @ts-check
 
-const socket = new WebSocket(
-  `ws${window.location.protocol === 'https' ? 's' : ''}://${window.location.host}${window.location.pathname}/live`,
+import { socketEvents } from './socket.js'
+
+// New deps in the import map require a reload to apply
+socketEvents.on(
+  'depChange',
+  ({ change }) => change === 'add' && window.location.reload(),
 )
 
-socket.addEventListener('message', ({ data }) => {
-  const /** @type {string[]} */ split = data.split(' ')
-
-  switch (split.shift()) {
-    case 'swap':
-      swap(split.shift(), split.join(' '))
-      break
-  }
-})
-
-/**
- * @param {'head' | 'body'} target
- * @param {string} content
- */
-function swap(target, content) {
+socketEvents.on('swap', ({ target, content }) => {
   if (target === 'head') {
     document.head.innerHTML = content
     return
@@ -39,4 +29,4 @@ function swap(target, content) {
 
     hotScript.parentElement?.replaceChild(newScript, hotScript)
   }
-}
+})

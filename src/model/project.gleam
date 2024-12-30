@@ -128,9 +128,12 @@ pub fn update_content(project: Project, type_: UpdateType, content: String) {
       use imports <- result.try(
         modules.parse_imports(content) |> result.replace_error(ScriptParseError),
       )
-      let new_modules =
-        modules.new_deps(imports, project.modules)
+
+      let new_deps = modules.new_deps(imports, project.modules)
+      let #(new_modules, removed_deps) =
+        new_deps
         |> dict.merge(project.modules)
+        |> modules.cleanup(imports, _)
 
       "update projects set modules = ? where id = ?"
       |> sqlight.query(
@@ -146,19 +149,24 @@ pub fn update_content(project: Project, type_: UpdateType, content: String) {
         expecting: dynamic.element(0, dynamic.optional(dynamic.int)),
       )
       |> result.map_error(DatabaseError)
-      |> result.replace(new_modules)
+      |> result.replace(#(new_modules, new_modules, removed_deps))
     }
-    _ -> Ok(project.modules)
-  }
-  let module_update = case modules {
-    Ok(m) -> update_modules(_, m)
-    _ -> function.identity
+    _ -> Ok(#(project.modules, dict.new(), dict.new()))
   }
 
-  project
-  |> module_update
-  |> update_type_content(type_, content)
-  |> Ok
+  let #(module_update, added, removed) =
+    modules
+    |> result.map(fn(input) { #(update_modules(_, input.0), input.1, input.2) })
+    |> result.map_error(io.debug)
+    |> result.replace_error(#(function.identity, dict.new(), dict.new()))
+    |> result.unwrap_both
+
+  let project =
+    project
+    |> module_update
+    |> update_type_content(type_, content)
+
+  Ok(#(project, added, removed))
 }
 
 pub fn get_by_id(id: Int) {

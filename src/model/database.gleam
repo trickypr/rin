@@ -25,11 +25,10 @@ pub fn setup() {
       body text default \"<h1>Hello project!</h1>\",
       css text default \"body { font-family: sans-serif; }\",
       js text default \"\",
+      modules text not null default \"{}\",
     
       foreign key(owner_id) references users(id)
     );
-
-    alter table projects add column modules text not null default \"{}\";
   "
     |> sqlight.exec(conn)
 

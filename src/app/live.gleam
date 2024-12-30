@@ -2,8 +2,7 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/function
 import gleam/http/request
-import gleam/int
-import gleam/io
+import gleam/list
 import gleam/option
 import gleam/otp/actor
 import gleam/result
@@ -22,6 +21,11 @@ type ProjectManagerMessage {
     component: ProjectLiveSwap,
     value: String,
   )
+  ProjectManagerSendDepChange(
+    project_id: Int,
+    dep_change: ProjectDepChange,
+    dep: String,
+  )
 
   ProjectManagerRequsetListenerId(reply_with: process.Subject(Int))
   ProjectManagerRegisterSwapListener(
@@ -30,6 +34,13 @@ type ProjectManagerMessage {
     listener: fn(ProjectLiveSwap, String) -> Nil,
   )
   ProjectmanagerRemoveSwapListener(project_id: Int, listener_id: Int)
+
+  ProjectManagerRegisterDepChange(
+    project_id: Int,
+    listener_id: Int,
+    listener: fn(ProjectDepChange, String) -> Nil,
+  )
+  ProjectManagerRemoveDepChange(project_id: Int, listener_id: Int)
 }
 
 pub type ProjectLiveSwap {
@@ -44,19 +55,37 @@ fn live_swap_to_string(swap: ProjectLiveSwap) {
   }
 }
 
+pub type ProjectDepChange {
+  Add
+  Remove
+}
+
+fn dep_change_to_string(change: ProjectDepChange) {
+  case change {
+    Add -> "add"
+    Remove -> "remove"
+  }
+}
+
 type LiveState {
   LiveState(next_id: Int, projects: dict.Dict(Int, LiveProject))
 }
 
 type LiveProject {
-  LiveProject(swaps: dict.Dict(Int, fn(ProjectLiveSwap, String) -> Nil))
+  LiveProject(
+    swaps: dict.Dict(Int, fn(ProjectLiveSwap, String) -> Nil),
+    dep_change: dict.Dict(Int, fn(ProjectDepChange, String) -> Nil),
+  )
 }
 
 fn clean(state) {
   LiveState(
     ..state,
     projects: state.projects
-      |> dict.filter(fn(_, project) { project.swaps |> dict.size != 0 }),
+      |> dict.filter(fn(_, project) {
+        { { project.swaps |> dict.size } + { project.dep_change |> dict.size } }
+        != 0
+      }),
   )
 }
 
@@ -73,7 +102,7 @@ pub fn create() {
                 project_id,
                 update(
                   dict.get(state.projects, project_id)
-                  |> result.unwrap(LiveProject(dict.new())),
+                  |> result.unwrap(LiveProject(dict.new(), dict.new())),
                 ),
               ),
           )
@@ -84,17 +113,40 @@ pub fn create() {
             process.send(client, state.next_id)
             LiveState(..state, next_id: state.next_id + 1)
           }
+
           ProjectManagerRegisterSwapListener(project_id, listener_id, listener) ->
             update_project(project_id, fn(project) {
               LiveProject(
+                ..project,
                 swaps: project.swaps |> dict.insert(listener_id, listener),
               )
             })
           ProjectmanagerRemoveSwapListener(project_id, listener_id) ->
             update_project(project_id, fn(project) {
-              LiveProject(swaps: project.swaps |> dict.delete(listener_id))
+              LiveProject(
+                ..project,
+                swaps: project.swaps |> dict.delete(listener_id),
+              )
             })
             |> clean
+
+          ProjectManagerRegisterDepChange(project_id, listener_id, listener) ->
+            update_project(project_id, fn(project) {
+              LiveProject(
+                ..project,
+                dep_change: project.dep_change
+                  |> dict.insert(listener_id, listener),
+              )
+            })
+          ProjectManagerRemoveDepChange(project_id, listener_id) ->
+            update_project(project_id, fn(project) {
+              LiveProject(
+                ..project,
+                dep_change: project.dep_change |> dict.delete(listener_id),
+              )
+            })
+            |> clean
+
           ProjectManagerSendSwap(project_id, location, content) -> {
             let _ =
               state.projects
@@ -102,6 +154,18 @@ pub fn create() {
               |> result.then(fn(project) {
                 project.swaps
                 |> dict.map_values(fn(_, swapper) { swapper(location, content) })
+                Ok(Nil)
+              })
+
+            state
+          }
+          ProjectManagerSendDepChange(project_id, dep_change, dep) -> {
+            let _ =
+              state.projects
+              |> dict.get(project_id)
+              |> result.then(fn(project) {
+                project.dep_change
+                |> dict.map_values(fn(_, swapper) { swapper(dep_change, dep) })
                 Ok(Nil)
               })
 
@@ -148,6 +212,25 @@ fn remove_swap_listener(live: Live, project_id: Int, listener: ListenerId) {
   )
 }
 
+fn add_dep_change_listener(
+  live: Live,
+  project_id,
+  listener: ListenerId,
+  callback,
+) {
+  process.send(
+    live.subject,
+    ProjectManagerRegisterDepChange(project_id, listener.inner, callback),
+  )
+}
+
+fn remove_dep_change_listener(live: Live, project_id, listener: ListenerId) {
+  process.send(
+    live.subject,
+    ProjectManagerRemoveDepChange(project_id, listener.inner),
+  )
+}
+
 // =============================================================================
 // APIs exposed to code
 
@@ -160,6 +243,7 @@ type SocketState {
 
 type SocketSelectorMessage {
   SocketSwap(location: ProjectLiveSwap, content: String)
+  SocketDep(dep_change: ProjectDepChange, dep: String)
 }
 
 // Creates a websocket for sending live messages
@@ -173,6 +257,13 @@ pub fn live_socket_request(
   live: Live,
   project: project.Project,
 ) {
+  let send_dep = fn(conn, dep_change, dep) {
+    mist.send_text_frame(
+      conn,
+      "dep " <> dep_change_to_string(dep_change) <> " " <> dep,
+    )
+  }
+
   mist.websocket(
     request:,
     on_init: fn(_conn) {
@@ -185,11 +276,15 @@ pub fn live_socket_request(
       add_swap_listener(live, project.id, listener, fn(location, content) {
         process.send(subject, SocketSwap(location:, content:))
       })
+      add_dep_change_listener(live, project.id, listener, fn(dep_change, dep) {
+        process.send(subject, SocketDep(dep_change:, dep:))
+      })
 
       #(SocketState(listener:, subject:), option.Some(selector))
     },
     on_close: fn(state) {
       remove_swap_listener(live, project.id, state.listener)
+      remove_dep_change_listener(live, project.id, state.listener)
     },
     handler: fn(state: SocketState, conn, msg) {
       case msg {
@@ -201,8 +296,8 @@ pub fn live_socket_request(
             )
           actor.continue(state)
         }
-        mist.Text("ping") -> {
-          let assert Ok(_) = mist.send_text_frame(conn, "pong")
+        mist.Custom(SocketDep(dep_change, dep)) -> {
+          let assert Ok(_) = send_dep(conn, dep_change, dep)
           actor.continue(state)
         }
         mist.Binary(_) | mist.Text(_) -> actor.continue(state)
@@ -223,5 +318,17 @@ pub fn send_swap_event(
   process.send(
     live.subject,
     ProjectManagerSendSwap(project_id, component, content),
+  )
+}
+
+pub fn send_dep_change(
+  live: Live,
+  project_id: Int,
+  change: ProjectDepChange,
+  dep: String,
+) {
+  process.send(
+    live.subject,
+    ProjectManagerSendDepChange(project_id, change, dep),
   )
 }

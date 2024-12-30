@@ -9,6 +9,9 @@ import { codemirror } from './theme.js'
 import { syntaxTree } from '@codemirror/language'
 import { autocompletion } from '@codemirror/autocomplete'
 import { characterEntities } from 'character-entities'
+import { StateEffect } from '@codemirror/state'
+
+import { socketEvents } from './socket.js'
 
 /** @type {HTMLDivElement[]} */
 const editors = [...document.querySelectorAll('.editor')]
@@ -38,6 +41,16 @@ function fetchAttributes(editor, key, set) {
     match = regex.exec(code)
   }
 }
+
+const typescriptWorker = import('comlink').then(async (Comlink) => {
+  const innerWorker = new Worker(new URL('./editor__lsp.js', import.meta.url), {
+    type: 'module',
+  })
+  const /** @type {import('comlink').Remote<import('./editor__lsp.js').LspWorker>} */ worker =
+      Comlink.wrap(innerWorker)
+  await worker.initialize()
+  return worker
+})
 
 const langMap = {
   head: async () => [
@@ -119,6 +132,13 @@ const langMap = {
   ],
   js: async () => [
     await import('@codemirror/lang-javascript').then((p) => p.javascript()),
+    ...(await Promise.all([
+      import('@valtown/codemirror-ts'),
+      typescriptWorker,
+    ]).then(([valtown, worker]) => [
+      valtown.tsFacetWorker.of({ worker, path: 'script.js' }),
+      valtown.tsSyncWorker(),
+    ])),
   ],
 }
 
@@ -150,21 +170,25 @@ function debounce(delay, fn, maxBuffer = 10) {
 
 editors.forEach(async (editor) => {
   const doc = editor.innerText
-  const { type } = editor.dataset
+  const /** @type {{ type: 'head' | 'body' | 'css' | 'js' }} */ { type } =
+      editor.dataset
   let lastSave = doc
   editor.innerHTML = ''
 
-  const langExtensions = await langMap[type]()
+  // JS is a lot more costly to evaluate and doesn't really have a stable
+  // intermeidate state, so we make these a lot larger
+  const timeout = type === 'js' ? 1000 : 200
+  const buffer = type === 'js' ? 1000 : 4
+
   const state = EditorState.create({
     doc,
     extensions: [
       basicSetup,
       codemirror,
-      ...langExtensions,
       keymap.of(defaultKeymap),
       EditorView.updateListener.of(
         debounce(
-          200,
+          timeout,
           (updates) => {
             const lastUpdate = updates.pop()
             if (!lastUpdate) return
@@ -177,7 +201,7 @@ editors.forEach(async (editor) => {
               body,
             })
           },
-          4,
+          buffer,
         ),
       ),
     ],
@@ -187,4 +211,38 @@ editors.forEach(async (editor) => {
     state,
     parent: editor,
   })
+
+  queueMicrotask(async () => {
+    const langExtensions = await langMap[type]()
+    editorMap[type]?.dispatch({
+      effects: StateEffect.appendConfig.of(langExtensions),
+    })
+
+    if (type === 'js') {
+      const worker = await typescriptWorker
+      await worker.runAta({ file: doc })
+      const valtown = await import('@valtown/codemirror-ts')
+      editorMap[type]?.dispatch({
+        effects: StateEffect.appendConfig.of([
+          valtown.tsLinterWorker(),
+          autocompletion({ override: [valtown.tsAutocompleteWorker()] }),
+          valtown.tsHoverWorker(),
+        ]),
+      })
+    }
+  })
+})
+
+socketEvents.on('depChange', async ({ change, packageName }) => {
+  console.info('depChange', change, packageName)
+
+  if (change === 'remove') {
+    // For the moment, we don't care
+    return
+  }
+
+  // Force an ata reevaluation
+  const worker = await typescriptWorker
+  await worker.runAta({ file: editorMap.js.state.doc.toString() })
+  // TODO: Force linter to re run
 })

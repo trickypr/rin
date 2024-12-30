@@ -138,7 +138,7 @@ fn update(
 ) {
   use body <- wisp.require_string_body(req)
   case project.update_content(project, update, body) {
-    Ok(project) -> {
+    Ok(#(project, deps_added, deps_removed)) -> {
       let #(location, content) = case update {
         project.Body -> #(live.Body, project_view_body(project, "hot"))
         project.JS -> #(live.Body, project_view_body(project, "hot"))
@@ -146,6 +146,14 @@ fn update(
         project.Head -> #(live.Head, project_view_head(project))
       }
       live.send_swap_event(live, project.id, location, content)
+
+      deps_added
+      |> dict.keys
+      |> list.map(live.send_dep_change(live, project.id, live.Add, _))
+      deps_removed
+      |> dict.keys
+      |> list.map(live.send_dep_change(live, project.id, live.Remove, _))
+
       wisp.ok()
     }
     Error(_) -> wisp.internal_server_error()

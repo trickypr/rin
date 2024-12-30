@@ -81,18 +81,18 @@ fn handle_request(
 
 fn handle_mist_request(wisp_handler, live) {
   fn(req: request.Request(mist.Connection)) {
+    let socket_fn = fn(id) {
+      use id <- try_mist(internal_error(int.parse(id)))
+      // TODO: Auth
+      // use user <- try_mist(github_auth.with_auth(req))
+      use project <- try_mist(not_found("project", project_model.get_by_id(id)))
+      // use _ <- try_mist(project_model.owner_gate(project, user))
+      live.live_socket_request(req, live, project)
+    }
+
     case request.path_segments(req) {
-      ["projects", id, "view", "live"] -> {
-        use id <- try_mist(internal_error(int.parse(id)))
-        // TODO: Auth
-        // use user <- try_mist(github_auth.with_auth(req))
-        use project <- try_mist(not_found(
-          "project",
-          project_model.get_by_id(id),
-        ))
-        // use _ <- try_mist(project_model.owner_gate(project, user))
-        live.live_socket_request(req, live, project)
-      }
+      ["projects", id, "live"] -> socket_fn(id)
+      ["projects", id, "view", "live"] -> socket_fn(id)
       _ -> wisp_handler(req)
     }
   }
