@@ -53,39 +53,69 @@ const typescriptWorker = import('comlink').then(async (Comlink) => {
 })
 
 const langMap = {
-  head: async () => [
-    ...(await import('@codemirror/lang-html').then((p) => [
-      p.html(),
-      p.htmlLanguage.data.of({
-        autocomplete: (
-          /** @type {import('@codemirror/autocomplete').CompletionContext} */ context,
-        ) => {
-          const { state, pos } = context
-          const tree = syntaxTree(state)
-          const node = tree.resolveInner(pos, -1)
-          const nodePrev = node.prevSibling
+  head: async (loc = 'head') =>
+    [
+      ...(await import('@codemirror/lang-html').then((p) => [
+        p.html(),
+        p.htmlLanguage.data.of({
+          autocomplete: (
+            /** @type {import('@codemirror/autocomplete').CompletionContext} */ context,
+          ) => {
+            const { state, pos } = context
+            const tree = syntaxTree(state)
+            const node = tree.resolveInner(pos, -1)
+            const nodePrev = node.prevSibling
 
-          if (!nodePrev || nodePrev.name !== 'InvalidEntity') return
+            if (!nodePrev || nodePrev.name !== 'InvalidEntity') return
 
-          return {
-            from: node.from,
-            options: Object.entries(characterEntities).map(
-              ([label, detail]) => ({
-                label: label + ';',
-                detail,
-                type: 'text',
-              }),
-            ),
-          }
-        },
-      }),
-    ])),
-    // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
-    await import('@emmetio/codemirror6-plugin').then((p) =>
-      p.abbreviationTracker(),
-    ),
-  ],
-  body: () => langMap['head'](),
+            return {
+              from: node.from,
+              options: Object.entries(characterEntities).map(
+                ([label, detail]) => ({
+                  label: label + ';',
+                  detail,
+                  type: 'text',
+                }),
+              ),
+            }
+          },
+        }),
+      ])),
+      // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
+      await import('@emmetio/codemirror6-plugin').then((p) =>
+        p.abbreviationTracker(),
+      ),
+
+      loc == 'body' &&
+        EditorView.updateListener.of(
+          debounce(50, async (update) => {
+            const ids = new Set()
+            const classes = new Set()
+
+            fetchAttributes(update[0].view, 'id', ids)
+            fetchAttributes(update[0].view, 'class', classes)
+
+            const idTypes = [...ids].map(
+              (
+                id,
+              ) => `getElementById<E extends HTMLElement = HTMLElement>(elementId: '${id}'): E;
+                    querySelector<E extends HTMLElement = HTMLElement>(query: '#${id}'): E;`,
+            )
+            const classTypes = [...classes].map(
+              (
+                c,
+              ) => `getElementsByClassName<E extends HTMLElement = HTMLElement>(className: '${c}'): HTMLCollection;
+                    querySelector<E extends HTMLElement = HTMLElement>(query: '.${c}'): E;
+                    querySelectorAll<E extends HTMLElement = HTMLElement>(query: '.${c}'): NodeList;`,
+            )
+
+            const typeFile = `export {}; declare global { interface Document { ${idTypes.join(' ')} ${classTypes.join(' ')} } }`
+            const worker = await typescriptWorker
+            worker.updateFile({ path: 'index.d.ts', code: typeFile })
+          }),
+        ),
+    ].filter(Boolean),
+  body: () => langMap['head']('body'),
   css: async () => [
     ...(await import('@codemirror/lang-css').then((p) => [
       p.css(),

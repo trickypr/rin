@@ -2,6 +2,7 @@ import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
@@ -82,10 +83,14 @@ pub fn to_import_map(modules: Modules) {
 
 pub fn new_deps(imports: List(Import), modules: Modules) {
   // TODO: Make path dependancies not make this explode
-  imports
-  |> list.map(fn(imp) { #(imp.module_specifier, ModuleInfo(version: None)) })
-  |> dict.from_list
-  |> dict.filter(fn(key, _) { !dict.has_key(modules, key) })
+
+  let new =
+    imports
+    |> list.map(fn(imp) { #(imp.module_specifier, ModuleInfo(version: None)) })
+    |> dict.from_list
+    |> dict.filter(fn(key, _) { !dict.has_key(modules, key) })
+
+  new
 }
 
 /// Cleans up packages that are unused and do not have an assigned version

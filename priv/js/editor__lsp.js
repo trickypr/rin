@@ -18,8 +18,8 @@ const /** @type {import('typescript').CompilerOptions} */ COMPILER_OPTS = {
     allowJs: true,
     checkJs: true,
     lib: ['dom'],
-    module: ts.ModuleKind.ES2022,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    module: ts.ModuleKind.Node16,
+    moduleResolution: ts.ModuleResolutionKind.Node16,
   }
 
 let ata
@@ -43,9 +43,25 @@ const exposed = {
       typescript: ts,
       logger: console,
       delegate: {
-        finished(vfs) {
+        async finished(vfs) {
           const env = exposed.getEnv()
 
+          // If there were any @types packages that were found, we need to
+          // manually download their package files
+          const types = new Set()
+          for (const [name] of vfs) {
+            if (!name.startsWith('/node_modules/@types/')) continue
+            types.add(name.split('/')[3])
+          }
+
+          for (const typesPkg of types) {
+            const file = await fetch(
+              `https://cdn.jsdelivr.net/npm/@types/${typesPkg}/package.json`,
+            ).then((r) => r.text())
+            vfs.set(`/node_modules/@types/${typesPkg}/package.json`, file)
+          }
+
+          console.log(vfs)
           for (const [name, contents] of vfs) {
             if (env.getSourceFile(name)) {
               env.updateFile(name, contents)
