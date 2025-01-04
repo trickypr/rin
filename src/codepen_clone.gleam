@@ -6,6 +6,8 @@ import gleam/erlang/process
 import gleam/http/request
 import gleam/int
 import gleam/io
+import gleam/list
+import gleam/option
 import mist
 import model/database
 import radiate
@@ -15,7 +17,7 @@ import wisp/wisp_mist
 import app/project
 import model/project as project_model
 import templates/error_pages.{internal_error, not_found}
-import templates/mist_compat.{try_mist}
+import templates/mist_compat.{try_mist, try_wisp}
 
 /// The middleware stack that the request handler uses. The stack is itself a
 /// middleware function!
@@ -61,21 +63,41 @@ fn handle_request(
 ) -> Response {
   use _req <- middleware(req, static_dir, bundled_dir)
 
-  case wisp.path_segments(req) {
-    [] ->
-      case github_auth.has_auth(req) {
-        True -> wisp.redirect("/projects")
-        False -> wisp.redirect("/auth/github")
+  case req.host {
+    "defaultdev.trickypr.com" | "tricky-desktop" ->
+      case wisp.path_segments(req) {
+        [] ->
+          case github_auth.has_auth(req) {
+            True -> wisp.redirect("/projects")
+            False -> wisp.redirect("/auth/github")
+          }
+
+        ["auth", "github"] -> github_auth.authorize()
+        ["callback", "github"] -> github_auth.callback(req)
+
+        ["projects"] -> user.project_list(req)
+        ["check"] -> wisp.ok()
+
+        ["projects", id, ..rest] ->
+          project.handle_project_request(req, id, rest, live)
+        _ -> wisp.not_found()
       }
 
-    ["auth", "github"] -> github_auth.authorize()
-    ["callback", "github"] -> github_auth.callback(req)
+    host -> {
+      use possible_projects <- try_wisp(
+        project_model.get_for_host(host) |> internal_error,
+      )
+      io.debug(host)
+      use found_project <- try_wisp(
+        possible_projects
+        |> list.map(io.debug)
+        |> list.find(project_model.matches_path(_, wisp.path_segments(req)))
+        |> option.from_result
+        |> not_found("project", _),
+      )
 
-    ["projects"] -> user.project_list(req)
-
-    ["projects", id, ..rest] ->
-      project.handle_project_request(req, id, rest, live)
-    _ -> wisp.not_found()
+      project.project_static(found_project)
+    }
   }
 }
 

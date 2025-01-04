@@ -1,4 +1,5 @@
 import gleam/list
+import gleam/result
 import lustre/attribute
 import lustre/element
 import lustre/element/html
@@ -6,6 +7,12 @@ import lustre/element/html
 pub type TabPosition {
   Left
   Right
+}
+
+pub type Modifier {
+  /// Remove styling and padding
+  NoStyle
+  Position(TabPosition)
 }
 
 pub type TabLabel(a) {
@@ -18,8 +25,24 @@ pub type Tab(a) {
     name: String,
     label: TabLabel(a),
     contents: List(element.Element(a)),
-    pos: TabPosition,
+    modifiers: List(Modifier),
   )
+}
+
+fn has_modifier(tab: Tab(a), modifier: Modifier) {
+  tab.modifiers |> list.find(fn(mod) { mod == modifier }) |> result.is_ok
+}
+
+fn tab_position_matches(tab: Tab(a), position: TabPosition) {
+  tab.modifiers
+  |> list.find_map(fn(mod) {
+    case mod {
+      Position(pos) -> Ok(pos)
+      _ -> Error(Nil)
+    }
+  })
+  |> result.unwrap(Left)
+  == position
 }
 
 fn tab(tab: Tab(a)) {
@@ -73,11 +96,11 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
         [
           html.div(
             [attribute.class("tabs")],
-            tabs |> list.filter(fn(t) { t.pos == Left }) |> list.map(tab),
+            tabs |> list.filter(tab_position_matches(_, Left)) |> list.map(tab),
           ),
           html.div(
             [attribute.class("tabs")],
-            tabs |> list.filter(fn(t) { t.pos == Right }) |> list.map(tab),
+            tabs |> list.filter(tab_position_matches(_, Right)) |> list.map(tab),
           ),
         ],
       ),
@@ -86,6 +109,9 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
           [
             attribute.attribute("v-show", "tab == '" <> tab.name <> "'"),
             attribute.class("tabs__content"),
+            attribute.classes([
+              #("tabs__tab--content", !has_modifier(tab, NoStyle)),
+            ]),
           ],
           tab.contents,
         )

@@ -198,68 +198,70 @@ function debounce(delay, fn, maxBuffer = 10) {
   }
 }
 
-editors.forEach(async (editor) => {
-  const doc = editor.innerText
-  const /** @type {{ type: 'head' | 'body' | 'css' | 'js' }} */ { type } =
-      editor.dataset
-  let lastSave = doc
-  editor.innerHTML = ''
+window.addEventListener('load', (_) => {
+  editors.forEach(async (editor) => {
+    const doc = editor.innerText
+    const /** @type {{ type: 'head' | 'body' | 'css' | 'js' }} */ { type } =
+        editor.dataset
+    let lastSave = doc
+    editor.innerHTML = ''
 
-  // JS is a lot more costly to evaluate and doesn't really have a stable
-  // intermeidate state, so we make these a lot larger
-  const timeout = type === 'js' ? 1000 : 200
-  const buffer = type === 'js' ? 1000 : 4
+    // JS is a lot more costly to evaluate and doesn't really have a stable
+    // intermeidate state, so we make these a lot larger
+    const timeout = type === 'js' ? 1000 : 200
+    const buffer = type === 'js' ? 1000 : 4
 
-  const state = EditorState.create({
-    doc,
-    extensions: [
-      basicSetup,
-      codemirror,
-      keymap.of(defaultKeymap),
-      EditorView.updateListener.of(
-        debounce(
-          timeout,
-          (updates) => {
-            const lastUpdate = updates.pop()
-            if (!lastUpdate) return
-            const body = lastUpdate.state.doc.toString()
-            if (body === lastSave) return
-            lastSave = body
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        basicSetup,
+        codemirror,
+        keymap.of(defaultKeymap),
+        EditorView.updateListener.of(
+          debounce(
+            timeout,
+            (updates) => {
+              const lastUpdate = updates.pop()
+              if (!lastUpdate) return
+              const body = lastUpdate.state.doc.toString()
+              if (body === lastSave) return
+              lastSave = body
 
-            fetch(`${window.location.href}/${editor.dataset.type}`, {
-              method: 'PUT',
-              body,
-            })
-          },
-          buffer,
+              fetch(`${window.location.href}/${editor.dataset.type}`, {
+                method: 'PUT',
+                body,
+              })
+            },
+            buffer,
+          ),
         ),
-      ),
-    ],
-  })
-
-  editorMap[type] = new EditorView({
-    state,
-    parent: editor,
-  })
-
-  queueMicrotask(async () => {
-    const langExtensions = await langMap[type]()
-    editorMap[type]?.dispatch({
-      effects: StateEffect.appendConfig.of(langExtensions),
+      ],
     })
 
-    if (type === 'js') {
-      const worker = await typescriptWorker
-      await worker.runAta({ file: doc })
-      const valtown = await import('@valtown/codemirror-ts')
+    editorMap[type] = new EditorView({
+      state,
+      parent: editor,
+    })
+
+    queueMicrotask(async () => {
+      const langExtensions = await langMap[type]()
       editorMap[type]?.dispatch({
-        effects: StateEffect.appendConfig.of([
-          valtown.tsLinterWorker(),
-          autocompletion({ override: [valtown.tsAutocompleteWorker()] }),
-          valtown.tsHoverWorker(),
-        ]),
+        effects: StateEffect.appendConfig.of(langExtensions),
       })
-    }
+
+      if (type === 'js') {
+        const worker = await typescriptWorker
+        await worker.runAta({ file: doc })
+        const valtown = await import('@valtown/codemirror-ts')
+        editorMap[type]?.dispatch({
+          effects: StateEffect.appendConfig.of([
+            valtown.tsLinterWorker(),
+            autocompletion({ override: [valtown.tsAutocompleteWorker()] }),
+            valtown.tsHoverWorker(),
+          ]),
+        })
+      }
+    })
   })
 })
 

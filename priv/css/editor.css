@@ -31,6 +31,8 @@ body {
   max-height: 100vh;
   min-height: 100vh;
   overflow: hidden;
+}
 
-  font-family: "Fira Code", monospace;
+.cm-scroller {
+  font-family: "Fira Code", monospace !important;
 }

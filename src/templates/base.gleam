@@ -3,7 +3,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 
-const stylesheets = ["base.css", "tabs.css"]
+const stylesheets = ["base.css", "tabs.css", "form.css"]
 
 pub fn base(head, body) {
   html.html([], [

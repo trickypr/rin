@@ -26,6 +26,8 @@ pub fn setup() {
       css text default \"body { font-family: sans-serif; }\",
       js text default \"\",
       modules text not null default \"{}\",
+      host text,
+      path text,
     
       foreign key(owner_id) references users(id)
     );

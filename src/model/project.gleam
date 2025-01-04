@@ -2,10 +2,11 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/function
+import gleam/http/request
 import gleam/io
 import gleam/json
 import gleam/list
-import gleam/option
+import gleam/option.{type Option}
 import gleam/result
 import model/database
 import model/modules
@@ -22,6 +23,8 @@ pub type Project {
     css: String,
     js: String,
     modules: modules.Modules,
+    host: Option(String),
+    path: Option(String),
   )
 }
 
@@ -33,7 +36,7 @@ pub type ProjectError {
 fn query(query: String, values) {
   use conn <- database.get()
   let sql = "
-    select id, owner_id, head, body, css, js, modules
+    select id, owner_id, head, body, css, js, modules, host, path
     from projects
     where 
     " <> query
@@ -48,6 +51,8 @@ fn query(query: String, values) {
         use css <- decode.field(4, decode.string)
         use js <- decode.field(5, decode.string)
         use modules <- decode.field(6, modules.decoder())
+        use host <- decode.field(7, decode.optional(decode.string))
+        use path <- decode.field(8, decode.optional(decode.string))
 
         let modules =
           modules
@@ -63,6 +68,8 @@ fn query(query: String, values) {
           css:,
           js:,
           modules:,
+          host:,
+          path:,
         ))
       })
       |> result.map_error(fn(errors) {
@@ -169,6 +176,31 @@ pub fn update_content(project: Project, type_: UpdateType, content: String) {
   Ok(#(project, added, removed))
 }
 
+pub fn update_publish(
+  project: Project,
+  host: Option(String),
+  path: Option(String),
+) {
+  use conn <- database.get()
+  let sql = "update projects set host = ?, path = ? where id = ?"
+  use _ <- result.try(
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.nullable(sqlight.text, host),
+        sqlight.nullable(sqlight.text, path),
+        sqlight.int(project.id),
+      ],
+      expecting: dynamic.element(0, dynamic.optional(dynamic.int)),
+    )
+    |> result.map_error(DatabaseError),
+  )
+
+  Project(..project, host:, path:)
+  |> Ok
+}
+
 pub fn get_by_id(id: Int) {
   case query("id = ?", [sqlight.int(id)]) {
     Ok([project]) -> option.Some(project)
@@ -178,6 +210,18 @@ pub fn get_by_id(id: Int) {
 
 pub fn get_for_users(user: user.User) {
   query("owner_id = ?", [sqlight.int(user.id)])
+}
+
+pub fn get_for_host(host: String) {
+  query("host = ?", [sqlight.text(host)])
+}
+
+pub fn matches_path(project: Project, target: List(String)) {
+  project.path
+  |> option.map(fn(path) {
+    request.new() |> request.set_path(path) |> request.path_segments == target
+  })
+  |> option.unwrap(False)
 }
 
 pub fn owner_gate(project: Project, user: user.User) {

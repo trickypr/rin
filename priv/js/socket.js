@@ -12,7 +12,7 @@ import mitt from 'mitt'
 export const socketEvents = mitt()
 
 const socket = new WebSocket(
-  `ws${window.location.protocol === 'https' ? 's' : ''}://${window.location.host}${window.location.pathname}/live`,
+  `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}${window.location.pathname}/live`,
 )
 
 socket.addEventListener('message', ({ data }) => {
