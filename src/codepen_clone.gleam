@@ -78,6 +78,10 @@ fn handle_request(
         ["projects"] -> user.project_list(req)
         ["check"] -> wisp.ok()
 
+        ["projects", "create"] -> {
+          io.debug("Create route")
+          project.create(req)
+        }
         ["projects", id, ..rest] ->
           project.handle_project_request(req, id, rest, live)
         _ -> wisp.not_found()

@@ -14,12 +14,14 @@ pub fn project_list(request: wisp.Request) {
   use projs <- try_wisp(internal_error(project.get_for_users(user)))
 
   wisp.ok()
-  |> wisp.html_body(base.base(
-    [html.title([], "User Projects")],
-    list.map(projs, fn(proj) {
-      html.a([attribute.href("/projects/" <> int.to_string(proj.id))], [
-        html.text(proj.id |> int.to_string()),
-      ])
-    }),
-  ))
+  |> wisp.html_body(
+    base.base([html.title([], "User Projects")], [
+      html.a([attribute.href("/projects/create")], [html.text("Create new")]),
+      ..list.map(projs, fn(proj) {
+        html.a([attribute.href("/projects/" <> int.to_string(proj.id))], [
+          html.text(proj.id |> int.to_string()),
+        ])
+      })
+    ]),
+  )
 }

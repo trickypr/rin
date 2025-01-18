@@ -47,6 +47,9 @@ importers:
       '@typescript/vfs':
         specifier: ^1.6.0
         version: 1.6.0(typescript@5.7.2)
+      '@valtown/codemirror-continue':
+        specifier: ^2.0.0
+        version: 2.0.0(@codemirror/language@6.10.8)(@codemirror/state@6.5.0)(@codemirror/view@6.36.1)
       '@valtown/codemirror-ts':
         specifier: ^2.3.1
         version: 2.3.1(@codemirror/autocomplete@6.18.4)(@codemirror/lint@6.8.4)(@codemirror/state@6.5.0)(@codemirror/view@6.36.1)
@@ -161,6 +164,13 @@ packages:
     resolution: {integrity: sha512-hvJUjNVeBMp77qPINuUvYXj4FyWeeMMKZkxEATEU3hqBAQ7qdTBCUFT7Sp0Zu0faeEtFf+ldXxMEDr/bk73ISg==}
     peerDependencies:
       typescript: '*'
+
+  '@valtown/codemirror-continue@2.0.0':
+    resolution: {integrity: sha512-QITKJg0mD5g3hjidhvA11wUt7Pul04mhsonZ7eychjDswuE3ds05yijpEMu3I3VwXHeELsMqYpBRVUP+3mxceA==}
+    peerDependencies:
+      '@codemirror/language': ^6
+      '@codemirror/state': ^6
+      '@codemirror/view': ^6
 
   '@valtown/codemirror-ts@2.3.1':
     resolution: {integrity: sha512-v5XiI4WA+bUy0XDgkrqZksqBWgIUeyLZuC94Px/rhXBph8ASmVXaimlGDtt0vH/9t8aDdIZYdr59r9H3oKMFOg==}
@@ -367,6 +377,12 @@ snapshots:
       typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
+
+  '@valtown/codemirror-continue@2.0.0(@codemirror/language@6.10.8)(@codemirror/state@6.5.0)(@codemirror/view@6.36.1)':
+    dependencies:
+      '@codemirror/language': 6.10.8
+      '@codemirror/state': 6.5.0
+      '@codemirror/view': 6.36.1
 
   '@valtown/codemirror-ts@2.3.1(@codemirror/autocomplete@6.18.4)(@codemirror/lint@6.8.4)(@codemirror/state@6.5.0)(@codemirror/view@6.36.1)':
     dependencies:

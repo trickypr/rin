@@ -1,15 +1,15 @@
 // @ts-check
 /// <reference path="./editor.d.ts" />
 
-import { defaultKeymap } from '@codemirror/commands'
-import { EditorState } from '@codemirror/state'
+import { defaultKeymap, indentWithTab } from '@codemirror/commands'
+import { EditorState, StateEffect, Prec } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { codemirror } from './theme.js'
 import { syntaxTree } from '@codemirror/language'
 import { autocompletion } from '@codemirror/autocomplete'
 import { characterEntities } from 'character-entities'
-import { StateEffect } from '@codemirror/state'
+import { continueKeymap } from '@valtown/codemirror-continue'
 
 import { socketEvents } from './socket.js'
 
@@ -57,6 +57,7 @@ const langMap = {
     [
       ...(await import('@codemirror/lang-html').then((p) => [
         p.html(),
+
         p.htmlLanguage.data.of({
           autocomplete: (
             /** @type {import('@codemirror/autocomplete').CompletionContext} */ context,
@@ -82,9 +83,10 @@ const langMap = {
         }),
       ])),
       // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
-      await import('@emmetio/codemirror6-plugin').then((p) =>
+      ...(await import('@emmetio/codemirror6-plugin').then((p) => [
         p.abbreviationTracker(),
-      ),
+        keymap.of([{ key: 'c-e', run: p.expandAbbreviation }]),
+      ])),
 
       loc == 'body' &&
         EditorView.updateListener.of(
@@ -169,6 +171,7 @@ const langMap = {
       valtown.tsFacetWorker.of({ worker, path: 'script.js' }),
       valtown.tsSyncWorker(),
     ])),
+    Prec.high(keymap.of(continueKeymap)),
   ],
 }
 
@@ -217,6 +220,7 @@ window.addEventListener('load', (_) => {
         basicSetup,
         codemirror,
         keymap.of(defaultKeymap),
+        EditorView.lineWrapping,
         EditorView.updateListener.of(
           debounce(
             timeout,
@@ -246,7 +250,10 @@ window.addEventListener('load', (_) => {
     queueMicrotask(async () => {
       const langExtensions = await langMap[type]()
       editorMap[type]?.dispatch({
-        effects: StateEffect.appendConfig.of(langExtensions),
+        effects: StateEffect.appendConfig.of([
+          ...langExtensions,
+          keymap.of([indentWithTab]),
+        ]),
       })
 
       if (type === 'js') {

@@ -104,6 +104,7 @@ fn project_editor(project: project.Project, user: user.User) {
           tabs.Tab("JS", tabs.Name, [editor("js", js)], [
             tabs.Position(tabs.Left),
             tabs.NoStyle,
+            tabs.ContainerStyle([#("overflow", "hidden")]),
           ]),
           tabs.Tab(
             "Dependancies",
@@ -291,4 +292,12 @@ fn project_update_host(req, project: project.Project) {
   )
 
   wisp.ok()
+}
+
+pub fn create(req) {
+  io.debug(req)
+  use user <- try_wisp(github_auth.with_auth(req))
+  io.debug(user)
+  use project_id <- try_wisp(project.create(user) |> internal_error)
+  wisp.redirect("/projects/" <> int.to_string(project_id))
 }

@@ -216,6 +216,19 @@ pub fn get_for_host(host: String) {
   query("host = ?", [sqlight.text(host)])
 }
 
+pub fn create(user: user.User) {
+  io.debug(user)
+  use conn <- database.get()
+  let sql = "insert into projects (owner_id) values (?) returning id"
+  use id <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.int(user.id)],
+    expecting: dynamic.element(0, dynamic.int),
+  ))
+  id |> list.first() |> result.unwrap(-1) |> Ok
+}
+
 pub fn matches_path(project: Project, target: List(String)) {
   project.path
   |> option.map(fn(path) {

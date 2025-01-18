@@ -1,3 +1,4 @@
+import gleam/io
 import gleam/list
 import gleam/result
 import lustre/attribute
@@ -13,6 +14,7 @@ pub type Modifier {
   /// Remove styling and padding
   NoStyle
   Position(TabPosition)
+  ContainerStyle(List(#(String, String)))
 }
 
 pub type TabLabel(a) {
@@ -70,6 +72,9 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
   let assert Ok(first_tab) = list.first(tabs)
   let state_name = "'tabs__" <> tab_id <> "'"
 
+  io.println("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  io.debug(tabs)
+
   html.div(
     [
       attribute.id("tabs__container--" <> tab_id),
@@ -112,6 +117,15 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
             attribute.classes([
               #("tabs__tab--content", !has_modifier(tab, NoStyle)),
             ]),
+            ..{
+              tab.modifiers
+              |> list.filter_map(fn(mod) {
+                case mod {
+                  ContainerStyle(style) -> Ok(attribute.style(style))
+                  _ -> Error(Nil)
+                }
+              })
+            }
           ],
           tab.contents,
         )

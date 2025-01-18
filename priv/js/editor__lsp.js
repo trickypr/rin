@@ -17,7 +17,7 @@ const /** @type {import('typescript').CompilerOptions} */ COMPILER_OPTS = {
     target: ts.ScriptTarget.ES2024,
     allowJs: true,
     checkJs: true,
-    lib: ['dom'],
+    lib: ['dom', 'ES2022'],
     module: ts.ModuleKind.Node16,
     moduleResolution: ts.ModuleResolutionKind.Node16,
   }
