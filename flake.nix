@@ -4,9 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    nix-gleam = {
-      url = "github:arnarg/nix-gleam";
-    };
+    nix-gleam.url = "github:arnarg/nix-gleam";
   };
 
   outputs =

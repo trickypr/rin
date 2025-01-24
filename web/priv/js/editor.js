@@ -85,7 +85,16 @@ const langMap = {
       // await import('@overleaf/codemirror-tree-view').then((p) => p.treeView),
       ...(await import('@emmetio/codemirror6-plugin').then((p) => [
         p.abbreviationTracker(),
-        keymap.of([{ key: 'c-e', run: p.expandAbbreviation }]),
+        keymap.of([
+          {
+            key: 'c-e',
+            run: p.expandAbbreviation,
+          },
+          {
+            key: 'c-s-e',
+            run: p.enterAbbreviationMode,
+          },
+        ]),
       ])),
 
       loc == 'body' &&
