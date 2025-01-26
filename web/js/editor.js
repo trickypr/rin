@@ -42,15 +42,20 @@ function fetchAttributes(editor, key, set) {
   }
 }
 
-const typescriptWorker = import('comlink').then(async (Comlink) => {
-  const innerWorker = new Worker(new URL('./editor__lsp.js', import.meta.url), {
-    type: 'module',
-  })
-  const /** @type {import('comlink').Remote<import('./editor__lsp.js').LspWorker>} */ worker =
-      Comlink.wrap(innerWorker)
-  await worker.initialize()
-  return worker
-})
+const typescriptWorker = import('comlink').then(
+  async ({ default: Comlink }) => {
+    const innerWorker = new Worker(
+      new URL('./editor__lsp.js', import.meta.url),
+      {
+        type: 'module',
+      },
+    )
+    const /** @type {import('comlink').Remote<import('./editor__lsp.js').LspWorker>} */ worker =
+        Comlink.wrap(innerWorker)
+    await worker.initialize()
+    return worker
+  },
+)
 
 const langMap = {
   head: async (loc = 'head') =>

@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "build": "npm run build:js",
-    "build:js": "esbuild ./js/*.js --bundle --outdir=out/bundled --splitting --format=esm --minify --platform=node",
-    "bundle:watch": "esbuild ./js/*.js --bundle --outdir=out/bundled --watch --splitting --format=esm"
+    "build:js": "esbuild ./js/*.js --bundle --outdir=out/bundled --splitting --format=esm --minify --platform=node --define:process='{\"env\": {}}'",
+    "bundle:watch": "esbuild ./js/*.js --bundle --outdir=out/bundled --watch --splitting --format=esm --platform=node"
   },
   "keywords": [],
   "author": "",
