@@ -72,9 +72,6 @@ pub fn tabs(tab_id: String, tabs: List(Tab(a))) {
   let assert Ok(first_tab) = list.first(tabs)
   let state_name = "'tabs__" <> tab_id <> "'"
 
-  io.println("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-  io.debug(tabs)
-
   html.div(
     [
       attribute.id("tabs__container--" <> tab_id),

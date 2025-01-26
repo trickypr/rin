@@ -9,7 +9,7 @@ pkgs.buildGleamApplication {
   postConfigure = ''
     mkdir -p priv/bundled
     cp -r ${web}/css ./priv
-    cp -r ${web}/js/* ./priv/bundled
+    cp -r ${web}/out/js/* ./priv/bundled
     touch priv/is-nix-pkg
   '';
 }
