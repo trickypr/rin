@@ -27,14 +27,13 @@
           let
             server-pkg = import ./server/package.nix;
             web-pkg = import ./web/package.nix;
+            rin-pkg = import ./package.nix;
           in
           rec {
             rin-web = web-pkg pkgs;
-            rin-server = server-pkg {
-              inherit pkgs;
-              inherit rin-web;
-            };
-            default = rin-server;
+            rin-server = server-pkg pkgs;
+            rin = rin-pkg pkgs;
+            default = rin;
           };
 
         devShells.default = pkgs.mkShell {
