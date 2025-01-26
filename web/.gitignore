@@ -1,1 +1,2 @@
-priv/bundled
+out/
+node_modules/

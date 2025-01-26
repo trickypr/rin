@@ -23,13 +23,19 @@
         };
       in
       {
-        packages = rec {
-          rin = pkgs.buildGleamApplication {
-            src = ./.;
-            rebar3Package = pkgs.rebar3WithPlugins { plugins = with pkgs.beamPackages; [ pc ]; };
+        packages =
+          let
+            server-pkg = import ./server/package.nix;
+            web-pkg = import ./web/package.nix;
+          in
+          rec {
+            rin-web = web-pkg pkgs;
+            rin-server = server-pkg {
+              inherit pkgs;
+              inherit rin-web;
+            };
+            default = rin-server;
           };
-          default = rin;
-        };
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [

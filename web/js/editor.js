@@ -5,12 +5,12 @@ import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { EditorState, StateEffect, Prec } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
-import { codemirror } from './theme.js'
 import { syntaxTree } from '@codemirror/language'
 import { autocompletion } from '@codemirror/autocomplete'
 import { characterEntities } from 'character-entities'
 import { continueKeymap } from '@valtown/codemirror-continue'
 
+import { codemirror } from './editor/theme.js'
 import { socketEvents } from './socket.js'
 
 /** @type {HTMLDivElement[]} */

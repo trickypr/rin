@@ -77,6 +77,21 @@ fn project_editor(project: project.Project, user: user.User) {
           attribute.rel("stylesheet"),
           attribute.href("/css/editor.css"),
         ]),
+        html.link([
+          attribute.rel("preconnect"),
+          attribute.href("https://fonts.googleapis.com"),
+        ]),
+        html.link([
+          attribute.rel("preconnect"),
+          attribute.href("https://fonts.gstatic.com"),
+          attribute.attribute("crossorigin", ""),
+        ]),
+        html.link([
+          attribute.href(
+            "https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap",
+          ),
+          attribute.rel("stylesheet"),
+        ]),
         html.script(
           [
             attribute.src(

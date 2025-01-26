@@ -8,9 +8,11 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
+import gleam/result
 import mist
 import model/database
 import radiate
+import simplifile
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
 
@@ -91,7 +93,6 @@ fn handle_request(
       use possible_projects <- try_wisp(
         project_model.get_for_host(host) |> internal_error,
       )
-      io.debug(host)
       use found_project <- try_wisp(
         possible_projects
         |> list.map(io.debug)
@@ -125,16 +126,29 @@ fn handle_mist_request(wisp_handler, live) {
 }
 
 pub fn main() {
-  // Gleam code hot reloading
   let _ =
-    radiate.new()
-    |> radiate.add_dir("src")
-    |> radiate.on_reload(fn(_state, path) {
-      io.println("Reload because change in " <> path)
+    static_directory("is-nix-pkg")
+    |> simplifile.is_file
+    |> result.unwrap(False)
+    |> Ok
+    |> result.map(fn(is_nix) {
+      case is_nix {
+        False -> {
+          let _ =
+            radiate.new()
+            |> radiate.add_dir("src")
+            |> radiate.on_reload(fn(_state, path) {
+              io.println("Reload because change in " <> path)
+            })
+            |> radiate.start()
+          Nil
+        }
+        True -> Nil
+      }
     })
-    |> radiate.start()
 
-  wisp.configure_logger()
+  // Gleam code hot reloading
+  let _ = wisp.configure_logger()
   database.setup()
 
   let assert Ok(secret_key_base) = envoy.get("JWT_SECRET")
@@ -162,6 +176,6 @@ pub fn main() {
 }
 
 fn static_directory(name) {
-  let assert Ok(priv_directory) = wisp.priv_directory("codepen_clone")
+  let assert Ok(priv_directory) = wisp.priv_directory("rin")
   priv_directory <> "/" <> name
 }
