@@ -11,9 +11,11 @@ stdenv.mkDerivation {
   name = "rin";
   src = ./.;
 
-  install = ''
-    cp -r ${rin-server}/* $out
+  installPhase = ''
+    mkdir $out
+    cp -r --no-preserve=mode,ownership ${rin-server}/* $out
     cp -r ${web}/css $out/lib/rin/priv
-    cp -r ${web}/out/bundled $out/lib/rin/priv
+    cp -r ${web}/out $out/lib/rin/priv
+    chmod +x $out/bin/rin
   '';
 }
