@@ -32,12 +32,7 @@
           rec {
             rin-web = web-pkg pkgs;
             rin-server = server-pkg pkgs;
-            rin = rin-pkg {
-              stdenv = pkgs.stdenv;
-              inherit pkgs;
-              inherit rin-web;
-              inherit rin-server;
-            };
+            rin = rin-pkg pkgs;
             default = rin;
           };
 
