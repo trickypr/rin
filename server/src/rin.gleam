@@ -156,12 +156,7 @@ pub fn main() {
 
   let wisp_handler =
     wisp_mist.handler(
-      handle_request(
-        live,
-        static_directory("css"),
-        static_directory("bundled"),
-        _,
-      ),
+      handle_request(live, web_directory("css"), web_directory("bundled"), _),
       secret_key_base,
     )
 
@@ -178,4 +173,9 @@ pub fn main() {
 fn static_directory(name) {
   let assert Ok(priv_directory) = wisp.priv_directory("rin")
   priv_directory <> "/" <> name
+}
+
+fn web_directory(name) {
+  let assert Ok(web_directory) = envoy.get("WEB_DIRECTORY")
+  web_directory <> "/" <> name
 }

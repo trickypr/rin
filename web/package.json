@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "npm run build:js",
+    "build": "mkdir -p out && ln -s ../css ./out/css && npm run build:js",
     "build:js": "esbuild ./js/*.js --bundle --outdir=out/bundled --splitting --format=esm --minify --platform=node --define:process='{\"env\": {}}'",
-    "bundle:watch": "esbuild ./js/*.js --bundle --outdir=out/bundled --watch --splitting --format=esm --platform=node"
+    "bundle:watch": "npm run build:js --watch"
   },
   "keywords": [],
   "author": "",

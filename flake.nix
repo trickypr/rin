@@ -21,6 +21,11 @@
           inherit system;
           overlays = [ nix-gleam.overlays.default ];
         };
+
+        web-dev = pkgs.writeShellScriptBin "web-dev" "(cd web && mkdir -p out && ln -s ../css ./out/css && npm run bundle:watch)";
+        server-dev = pkgs.writeShellScriptBin "server-dev" "(cd server && gleam run)";
+
+        dev = pkgs.writeShellScriptBin "dev" "${pkgs.parallel}/bin/parallel --tag ::: web-dev server-dev";
       in
       {
         packages =
@@ -42,10 +47,16 @@
             esbuild
             glas
             gleam
+            nodejs
+
+            web-dev
+            server-dev
+            dev
           ];
 
           shellHook = ''
             export JWT_SECRET=$(${pkgs.libossp_uuid}/bin/uuid)
+            export WEB_DIRECTORY=$(pwd)/web/out
           '';
         };
       }
