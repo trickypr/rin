@@ -127,8 +127,8 @@ fn handle_mist_request(wisp_handler, live) {
 
 pub fn main() {
   let _ =
-    static_directory("is-nix-pkg")
-    |> simplifile.is_file
+    envoy.get("WEB_DIRECTORY")
+    |> result.map(fn(_) { True })
     |> result.unwrap(False)
     |> Ok
     |> result.map(fn(is_nix) {
