@@ -19,7 +19,9 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ nix-gleam.overlays.default ];
+          overlays = [
+            nix-gleam.overlays.default
+          ];
         };
 
         web-dev = pkgs.writeShellScriptBin "web-dev" "(cd web && mkdir -p out && ln -s ../css ./out/css && npm run bundle:watch)";
@@ -41,6 +43,14 @@
               inherit pkgs;
               inherit rin-web;
               inherit rin-server;
+              system = system;
+            };
+            docker = pkgs.dockerTools.buildLayeredImage {
+              name = "ghcr.io/trickypr/rin";
+              tag = "latest";
+              config = {
+                Cmd = [ "${rin}/bin/rin" ];
+              };
             };
             default = rin;
           };
