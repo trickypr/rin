@@ -45,13 +45,6 @@
               inherit rin-server;
               system = system;
             };
-            docker = pkgs.dockerTools.buildLayeredImage {
-              name = "ghcr.io/trickypr/rin";
-              tag = "latest";
-              config = {
-                Cmd = [ "${rin}/bin/rin" ];
-              };
-            };
             default = rin;
           };
 
